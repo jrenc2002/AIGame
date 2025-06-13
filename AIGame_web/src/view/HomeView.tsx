@@ -41,14 +41,21 @@ const HomeView: FC = () => {
             </motion.div>
 
             <motion.div
-              whileHover={{ scale: 1.02 }}
-              className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20 p-6 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-center min-h-[200px]"
+              whileHover={{ scale: 1.05, y: -5 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => navigate('/werewolf')}
+              className="bg-gradient-to-br from-purple-50 to-pink-100 dark:from-purple-900/20 dark:to-pink-800/20 p-6 rounded-lg border border-purple-200 dark:border-purple-700 cursor-pointer group shadow-lg hover:shadow-purple-500/25 transition-all duration-300"
             >
-              <div className="text-gray-400 dark:text-gray-500 mb-3">
-                <div className="w-12 h-12 text-3xl flex items-center justify-center">🚧</div>
+              <div className="text-purple-600 dark:text-purple-400 mb-3 group-hover:scale-110 transition-transform duration-300">
+                <div className="w-12 h-12 text-3xl flex items-center justify-center">🐺</div>
               </div>
-              <h3 className="text-lg font-semibold text-gray-500 dark:text-gray-400 mb-2">AI狼人杀</h3>
-              <p className="text-sm text-gray-400 dark:text-gray-500">即将上线...</p>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">AI狼人杀</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                智能特工推理对决，体验未来科技的狼人杀游戏
+              </p>
+              <div className="mt-3 text-sm text-purple-600 dark:text-purple-400 font-medium">
+                🚀 点击进入游戏 →
+              </div>
             </motion.div>
 
             <motion.div
@@ -76,6 +83,9 @@ const HomeView: FC = () => {
               <div className="mt-4 flex justify-center gap-4 text-xs">
                 <span className="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-1 rounded-full">
                   ✅ 赛博斗蛐蛐 已上线
+                </span>
+                <span className="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-1 rounded-full">
+                  ✅ AI狼人杀 已上线
                 </span>
                 <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 px-2 py-1 rounded-full">
                   🚧 更多游戏开发中
