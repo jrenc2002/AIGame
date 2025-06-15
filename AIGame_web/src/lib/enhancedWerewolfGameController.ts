@@ -26,7 +26,7 @@ export class EnhancedWerewolfGameController {
   private gameState: GameState
   private config: GameControllerConfig
   private nightActionResults: NightActionResult[] = []
-  private eventCallbacks: Map<string, Function[]> = new Map()
+  private eventCallbacks: Map<string, Array<(...args: any[]) => void>> = new Map()
 
   constructor(initialGameState: GameState, config?: Partial<GameControllerConfig>) {
     this.gameState = initialGameState
@@ -465,7 +465,7 @@ export class EnhancedWerewolfGameController {
   }
 
   // 公开接口
-  public on = (event: string, callback: Function) => {
+  public on = (event: string, callback: (...args: any[]) => void) => {
     if (!this.eventCallbacks.has(event)) this.eventCallbacks.set(event, [])
     this.eventCallbacks.get(event)!.push(callback)
   }

@@ -1,6 +1,4 @@
-import { generateText } from 'ai'
-import { openai } from '@ai-sdk/openai'
-import { getAIConfig, validateAIConfig } from './aiConfig'
+import { getAPIConfig, getValidAPIKey, hasValidAPIConfig } from './apiConfig'
 import { Player, GameState, GamePhase, RoleType } from '@/store/werewolf/types'
 
 // AI 决策结果
@@ -20,11 +18,12 @@ export interface AISpeechResult {
 }
 
 class AIGameService {
-  private config = getAIConfig()
-  private isConfigValid = false
+  private config = getAPIConfig()
+  private isConfigValid = true // AI狼人杀游戏始终可用，使用智能fallback机制
 
   constructor() {
-    this.isConfigValid = validateAIConfig(this.config)
+    // AI狼人杀游戏始终可用，使用智能fallback机制
+    this.isConfigValid = true
   }
 
   // 检查AI是否可用
@@ -32,187 +31,248 @@ class AIGameService {
     return this.isConfigValid
   }
 
-  // 生成AI角色的发言
+  // 生成AI角色的发言 - 使用真实API或智能fallback
   async generateAISpeech(
     player: Player,
     gameState: GameState,
     context: string = ''
   ): Promise<AISpeechResult> {
-    // 检查是否有真实的API密钥
-    const hasRealAPI = this.config.openaiApiKey !== 'fallback_ai_mode' && 
-                       this.config.openaiApiKey !== 'your_openai_api_key_here' && 
-                       this.config.openaiApiKey.length > 10
-
-    if (!this.isAIEnabled()) {
-      return this.getIntelligentFallbackSpeech(player, gameState, context)
+    // 检查是否有有效的API配置
+    if (hasValidAPIConfig('openai')) {
+      try {
+        // 调用真实的OpenAI API
+        const apiResponse = await this.callOpenAIAPI(player, gameState, context)
+        if (apiResponse) {
+          return apiResponse
+        }
+      } catch (error) {
+        console.error('OpenAI API调用失败, 使用fallback:', error)
+      }
     }
-
-    if (!hasRealAPI) {
-      // 使用智能fallback而不是调用API
-      return this.getIntelligentFallbackSpeech(player, gameState, context)
-    }
-
-    try {
-      const prompt = this.buildSpeechPrompt(player, gameState, context)
-      
-      const { text } = await generateText({
-        model: openai(this.config.openaiModel, {
-          apiKey: this.config.openaiApiKey,
-          baseURL: this.config.openaiBaseUrl,
-        }),
-        prompt,
-        maxTokens: this.config.maxTokens,
-        temperature: this.config.temperature,
-      })
-
-      return this.parseSpeechResponse(text)
-    } catch (error) {
-      console.error('AI语音生成失败，使用智能fallback:', error)
-      return this.getIntelligentFallbackSpeech(player, gameState, context)
-    }
+    
+    // 使用智能fallback
+    return this.getIntelligentFallbackSpeech(player, gameState, context)
   }
 
-  // 生成AI的游戏决策
+  // 生成AI的游戏决策 - 使用真实API或智能fallback
   async generateAIDecision(
     player: Player,
     gameState: GameState,
     availableTargets: Player[]
   ): Promise<AIDecisionResult> {
-    // 检查是否有真实的API密钥
-    const hasRealAPI = this.config.openaiApiKey !== 'fallback_ai_mode' && 
-                       this.config.openaiApiKey !== 'your_openai_api_key_here' && 
-                       this.config.openaiApiKey.length > 10
-
-    if (!this.isAIEnabled()) {
-      return this.getIntelligentFallbackDecision(player, gameState, availableTargets)
+    // 检查是否有有效的API配置
+    if (hasValidAPIConfig('openai')) {
+      try {
+        // 调用真实的OpenAI API进行决策
+        const apiResponse = await this.callOpenAIAPIForDecision(player, gameState, availableTargets)
+        if (apiResponse) {
+          return apiResponse
+        }
+      } catch (error) {
+        console.error('OpenAI API决策调用失败, 使用fallback:', error)
+      }
     }
+    
+    // 使用智能fallback
+    return this.getIntelligentFallbackDecision(player, gameState, availableTargets)
+  }
 
-    if (!hasRealAPI) {
-      // 使用智能fallback而不是调用API
-      return this.getIntelligentFallbackDecision(player, gameState, availableTargets)
-    }
-
+  // 调用OpenAI API生成发言
+  private async callOpenAIAPI(
+    player: Player,
+    gameState: GameState,
+    context: string
+  ): Promise<AISpeechResult | null> {
     try {
-      const prompt = this.buildDecisionPrompt(player, gameState, availableTargets)
+      const apiKey = getValidAPIKey('openai')
+      if (!apiKey) {
+        console.warn('没有有效的OpenAI API密钥')
+        return null
+      }
+
+      const prompt = this.buildWerewolfPrompt(player, gameState, context)
       
-      const { text } = await generateText({
-        model: openai(this.config.openaiModel, {
-          apiKey: this.config.openaiApiKey,
-          baseURL: this.config.openaiBaseUrl,
-        }),
-        prompt,
-        maxTokens: this.config.maxTokens,
-        temperature: this.config.temperature,
+      const response = await fetch(`${this.config.openaiBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: this.config.openaiModel || 'gpt-3.5-turbo',
+          messages: [
+            {
+              role: 'system',
+              content: '你是狼人杀游戏中的AI玩家。请根据你的角色、当前局势和游戏阶段生成合适的发言。回复格式：发言内容'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          max_tokens: 150,
+          temperature: 0.8
+        })
       })
 
-      return this.parseDecisionResponse(text, availableTargets)
+      if (!response.ok) {
+        throw new Error(`API调用失败: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      // 处理用户提供的响应格式
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        const content = data.choices[0].message.content.trim()
+        
+        return {
+          message: content,
+          emotion: this.extractEmotion(content, player),
+          confidence: 0.8
+        }
+      }
+      
+      return null
     } catch (error) {
-      console.error('AI决策生成失败，使用智能fallback:', error)
-      return this.getIntelligentFallbackDecision(player, gameState, availableTargets)
+      console.error('OpenAI API调用错误:', error)
+      return null
     }
   }
 
-  // 构建发言提示词
-  private buildSpeechPrompt(player: Player, gameState: GameState, context: string): string {
-    const roleDescription = this.getRoleDescription(player.role)
-    const phaseDescription = this.getPhaseDescription(gameState.currentPhase)
-    const personalityTrait = this.getPersonalityTrait(player.aiPersonality)
-    
-    return `你是一名AI狼人杀玩家，以下是你的角色信息：
+  // 调用OpenAI API生成决策
+  private async callOpenAIAPIForDecision(
+    player: Player,
+    gameState: GameState,
+    availableTargets: Player[]
+  ): Promise<AIDecisionResult | null> {
+    try {
+      const apiKey = getValidAPIKey('openai')
+      if (!apiKey) {
+        console.warn('没有有效的OpenAI API密钥')
+        return null
+      }
 
-角色身份：${roleDescription}
-性格特征：${personalityTrait}
-当前阶段：${phaseDescription}
-当前回合：第${gameState.currentRound}轮
-存活玩家：${gameState.players.filter(p => p.status === 'alive').length}人
+      const prompt = this.buildDecisionPrompt(player, gameState, availableTargets)
+      
+      const response = await fetch(`${this.config.openaiBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: this.config.openaiModel || 'gpt-3.5-turbo',
+          messages: [
+            {
+              role: 'system',
+              content: '你是狼人杀游戏中的AI玩家。请根据当前局势做出投票决策。回复格式：目标玩家ID|理由'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          max_tokens: 200,
+          temperature: 0.7
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`API调用失败: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+        const content = data.choices[0].message.content.trim()
+        return this.parseDecisionResponse(content, availableTargets, player)
+      }
+      
+      return null
+    } catch (error) {
+      console.error('OpenAI API决策调用错误:', error)
+      return null
+    }
+  }
+
+  // 构建狼人杀游戏提示词
+  private buildWerewolfPrompt(player: Player, gameState: GameState, context: string): string {
+    const roleDesc = this.getRoleDescription(player.role)
+    const phaseDesc = this.getPhaseDescription(gameState.currentPhase)
+    const alivePlayers = gameState.players.filter(p => p.status === 'alive')
+    
+    return `你是${player.name}，身份：${roleDesc}
+当前阶段：${phaseDesc}
+存活玩家：${alivePlayers.map(p => p.name).join(', ')}
+当前轮次：第${gameState.currentRound}轮
 上下文：${context}
 
-请根据你的身份和性格，生成一段简短的发言（30字以内）。发言应该：
-1. 符合你的角色身份和目标
-2. 体现你的性格特征
-3. 适合当前游戏阶段
-4. 不要直接暴露你的真实身份（除非是特殊情况）
-
-请用以下格式回复：
-MESSAGE: [你的发言内容]
-EMOTION: [neutral/suspicious/defensive/aggressive/confident]
-CONFIDENCE: [0.1-1.0之间的数字]`
+请根据你的身份和当前局势，生成一句合适的发言（20-40字）。`
   }
 
   // 构建决策提示词
   private buildDecisionPrompt(player: Player, gameState: GameState, availableTargets: Player[]): string {
-    const roleDescription = this.getRoleDescription(player.role)
-    const targetList = availableTargets.map(t => `${t.name}(${t.id})`).join(', ')
+    const roleDesc = this.getRoleDescription(player.role)
+    const targetNames = availableTargets.map(p => `${p.id}:${p.name}`).join(', ')
     
-    return `你是一名AI狼人杀玩家，需要做出游戏决策：
+    return `你是${player.name}，身份：${roleDesc}
+可选目标：${targetNames}
+当前轮次：第${gameState.currentRound}轮
 
-角色身份：${roleDescription}
-当前阶段：${this.getPhaseDescription(gameState.currentPhase)}
-可选目标：${targetList}
-当前回合：第${gameState.currentRound}轮
-
-根据你的身份和当前局势，选择一个最佳的行动目标。考虑因素：
-1. 你的角色目标和获胜条件
-2. 当前的威胁评估
-3. 隐藏身份的需要
-4. 推理和逻辑分析
-
-请用以下格式回复：
-ACTION: vote
-TARGET: [目标玩家ID]
-REASONING: [你的推理过程，50字以内]
-CONFIDENCE: [0.1-1.0之间的数字]
-MESSAGE: [向其他玩家解释你选择的理由，30字以内]`
+请选择一个目标进行投票，回复格式：目标ID|投票理由`
   }
 
-  // 解析AI发言响应
-  private parseSpeechResponse(response: string): AISpeechResult {
-    const lines = response.split('\n').filter(line => line.trim())
-    let message = '我需要仔细观察...'
-    let emotion: AISpeechResult['emotion'] = 'neutral'
-    let confidence = 0.5
-
-    for (const line of lines) {
-      if (line.startsWith('MESSAGE:')) {
-        message = line.replace('MESSAGE:', '').trim()
-      } else if (line.startsWith('EMOTION:')) {
-        const emotionStr = line.replace('EMOTION:', '').trim()
-        if (['neutral', 'suspicious', 'defensive', 'aggressive', 'confident'].includes(emotionStr)) {
-          emotion = emotionStr as AISpeechResult['emotion']
-        }
-      } else if (line.startsWith('CONFIDENCE:')) {
-        confidence = parseFloat(line.replace('CONFIDENCE:', '').trim()) || 0.5
-      }
+  // 从内容中提取情感
+  private extractEmotion(content: string, player: Player): AISpeechResult['emotion'] {
+    if (content.includes('怀疑') || content.includes('可疑') || content.includes('狼人')) {
+      return 'suspicious'
     }
-
-    return { message, emotion, confidence }
+    if (content.includes('不') || content.includes('反对') || content.includes('错误')) {
+      return 'defensive'
+    }
+    if (content.includes('一定') || content.includes('肯定') || content.includes('确信')) {
+      return 'confident'
+    }
+    if (content.includes('投票') || content.includes('出局') || content.includes('处决')) {
+      return 'aggressive'
+    }
+    return 'neutral'
   }
 
-  // 解析AI决策响应
-  private parseDecisionResponse(response: string, availableTargets: Player[]): AIDecisionResult {
-    const lines = response.split('\n').filter(line => line.trim())
-    let action: AIDecisionResult['action'] = 'vote'
-    let target = availableTargets[0]?.id
-    let reasoning = '基于当前局势的判断'
-    let confidence = 0.5
-    let message = '我选择这个目标'
-
-    for (const line of lines) {
-      if (line.startsWith('TARGET:')) {
-        const targetId = line.replace('TARGET:', '').trim()
-        if (availableTargets.some(t => t.id === targetId)) {
-          target = targetId
-        }
-      } else if (line.startsWith('REASONING:')) {
-        reasoning = line.replace('REASONING:', '').trim()
-      } else if (line.startsWith('CONFIDENCE:')) {
-        confidence = parseFloat(line.replace('CONFIDENCE:', '').trim()) || 0.5
-      } else if (line.startsWith('MESSAGE:')) {
-        message = line.replace('MESSAGE:', '').trim()
+  // 解析决策响应
+  private parseDecisionResponse(content: string, availableTargets: Player[], player: Player): AIDecisionResult {
+    const parts = content.split('|')
+    let targetId: string | undefined = undefined
+    let reasoning = '基于AI分析'
+    
+    if (parts.length >= 2) {
+      const proposedTargetId = parts[0].trim()
+      reasoning = parts[1].trim()
+      
+      // 验证目标ID是否有效
+      const validTarget = availableTargets.find(p => p.id === proposedTargetId)
+      if (validTarget) {
+        targetId = proposedTargetId
+      } else {
+        // 如果ID无效，尝试随机选择一个目标
+        const randomTarget = availableTargets[Math.floor(Math.random() * availableTargets.length)]
+        targetId = randomTarget.id
+        reasoning = `${reasoning}（系统修正目标）`
       }
+    } else {
+      // 如果格式不正确，随机选择目标
+      const randomTarget = availableTargets[Math.floor(Math.random() * availableTargets.length)]
+      targetId = randomTarget.id
+      reasoning = content || '基于AI分析'
     }
 
-    return { action, target, reasoning, confidence, message }
+    return {
+      action: 'vote',
+      target: targetId,
+      reasoning,
+      confidence: 0.7,
+      message: reasoning
+    }
   }
 
   // 获取角色描述
@@ -271,12 +331,13 @@ MESSAGE: [向其他玩家解释你选择的理由，30字以内]`
         emotion = 'confident'
         break
         
-      case 'day_discussion':
+      case 'day_discussion': {
         const result = this.getDiscussionMessage(player, gameState, alivePlayers, deadCount, round, personality)
         message = result.message
         emotion = result.emotion
         confidence = result.confidence
         break
+      }
         
       case 'day_voting':
         message = this.getVotingMessage(personality, round)

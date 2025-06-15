@@ -7,6 +7,8 @@ import { PlayerCard } from '@/components/werewolf/PlayerCard'
 import { GameBoard } from '@/components/werewolf/GameBoard'
 import { ChatPanel, ChatMessage } from '@/components/werewolf/ChatPanel'
 import { AIConfigPanel } from '@/components/werewolf/AIConfigPanel'
+import { RoleDisplay } from '@/components/werewolf/RoleDisplay'
+import { LLMTestPanel } from '@/components/werewolf/LLMTestPanel'
 
 import {
   gameStateAtom,
@@ -16,15 +18,18 @@ import {
   villagerPlayersAtom,
   voteResultsAtom,
   canVoteAtom,
-  remainingTimeAtom,
   currentPhaseAtom,
   gameWinnerAtom,
+  initialGameState,
   ROLE_CONFIGS
 } from '@/store/werewolf/gameState'
 
+import { useGameTimer } from '@/hooks/useGameTimer'
+import { useWerewolfGame } from '@/hooks/useGameManager'
+import { gameManager } from '@/core/GameManager'
 import { Player, RoleType, AIPersonality, AIDifficulty } from '@/store/werewolf/types'
 import { aiGameService, AIDecisionResult, AISpeechResult } from '@/lib/aiService'
-import { AIConfig } from '@/lib/aiConfig'
+import { APIConfig } from '@/lib/apiConfig'
 
 const WerewolfGameView: FC = () => {
   const [gameState, setGameState] = useAtom(gameStateAtom)
@@ -34,75 +39,128 @@ const WerewolfGameView: FC = () => {
   const villagerPlayers = useAtomValue(villagerPlayersAtom)
   const voteResults = useAtomValue(voteResultsAtom)
   const canVote = useAtomValue(canVoteAtom)
-  const remainingTime = useAtomValue(remainingTimeAtom)
   const gameWinner = useAtomValue(gameWinnerAtom)
   
+  // 使用新的游戏计时器
+  const { remainingTime, currentPhase, isActive } = useGameTimer()
+  
+  const [gameId, setGameId] = useState<string>('')
+  
+  // 使用真正的狼人杀游戏引擎
+  const {
+    currentGame,
+    gameState: engineGameState,
+    isLoading,
+    error,
+    aiThinking,
+    aiStreamingActive,
+    createWerewolfGame,
+    quickStartWerewolf,
+    startGame: startEngineGame,
+    joinGame,
+    executeAction,
+    clearError,
+    refreshGameState
+  } = useWerewolfGame(gameId)
   const [isGameInitialized, setIsGameInitialized] = useState(false)
   const [showRoles, setShowRoles] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
-  const [aiConfig, setAiConfig] = useState<AIConfig | null>(null)
+  const [aiConfig, setAiConfig] = useState<APIConfig | null>(null)
 
   // 初始化游戏
   useEffect(() => {
-    if (!isGameInitialized) {
+    if (!isGameInitialized && !currentGame) {
+      console.log('🎮 首次初始化游戏...')
       initializeGame()
       setIsGameInitialized(true)
     }
-  }, [isGameInitialized])
+  }, [isGameInitialized, currentGame])
 
-  // 生成随机玩家
-  const generateRandomPlayer = (id: number, isHuman: boolean = false): Player => {
-    const aiNames = [
-      '艾达', '博特', '赛娜', '麦克斯', '露娜', '凯文', '诺娃', '泽塔',
-      '阿尔法', '贝塔', '伽马', '德尔塔', '西格玛', '欧米茄'
-    ]
-
-    const avatars = ['🤖', '👩‍💻', '👨‍💻', '🦾', '🧠', '⚡', '🔮', '🌟', '💫', '🎭', '🎯', '🔥']
-    
-    const personalities: AIPersonality[] = ['logical', 'intuitive', 'aggressive', 'conservative', 'leader', 'follower']
-    const difficulties: AIDifficulty[] = ['easy', 'medium', 'hard']
-
-    return {
-      id: id.toString(),
-      name: isHuman ? '你' : aiNames[id % aiNames.length],
-      avatar: avatars[id % avatars.length],
-      role: 'villager', // 初始设置为村民，后面会重新分配
-      camp: 'villager',
-      status: 'alive',
-      isPlayer: isHuman,
-      aiDifficulty: isHuman ? undefined : difficulties[Math.floor(Math.random() * difficulties.length)],
-      aiPersonality: isHuman ? undefined : personalities[Math.floor(Math.random() * personalities.length)],
-      suspicionLevels: isHuman ? undefined : new Map(),
-      votesReceived: 0,
-      hasVoted: false,
-      hasUsedSkill: false,
-      isProtected: false,
-      isPoisoned: false,
-      isSaved: false
+  // 使用真正的游戏引擎初始化游戏
+  const initializeGame = async () => {
+    try {
+      console.log('🎮 开始创建真正的狼人杀游戏...')
+      
+      // 创建游戏（暂时使用文心一言，避免OpenAI配置问题）
+      const newGameId = await createWerewolfGame({
+        playerCount: 8,
+        aiPlayerCount: 7,
+        aiProvider: 'openai'  // 使用OpenAI作为默认AI提供商
+      })
+      
+      console.log(`✅ 游戏创建成功，ID: ${newGameId}`)
+      setGameId(newGameId)
+      
+      // 等待gameId状态更新
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // 加入游戏（作为真人玩家）
+      console.log('👤 加入游戏作为真人玩家...')
+      await joinGame(newGameId, {
+        id: `player_${Date.now()}`, // 使用时间戳避免ID冲突
+        name: '你',
+        isAI: false,
+        status: 'active'
+      })
+      
+      console.log('✅ 真人玩家加入成功')
+      
+      // 开始游戏
+      console.log('🚀 启动游戏引擎...')
+      await startEngineGame(newGameId)
+      
+      console.log('✅ 游戏引擎启动成功')
+      
+      toast.success('游戏创建成功！AI玩家正在加入...')
+      toast('LLM AI将在对话阶段自动生成发言', { icon: 'ℹ️' })
+      
+      console.log('🎮 真正的狼人杀游戏初始化完成，LLM AI已接入')
+      
+      // 手动刷新游戏状态，多次尝试确保同步
+      const forceSync = async (attempts = 0) => {
+        if (attempts >= 5) {
+          console.warn('⚠️ 游戏状态同步失败，已达到最大重试次数')
+          return
+        }
+        
+        console.log(`🔄 手动刷新游戏状态... (尝试 ${attempts + 1}/5)`)
+        refreshGameState()
+        
+        // 等待状态更新
+        await new Promise(resolve => setTimeout(resolve, 300))
+        
+        // 检查同步结果
+        const game = gameManager.getGame(newGameId)
+        const state = game?.engine.getGameState()
+        
+        console.log('🔍 检查游戏状态同步:')
+        console.log('  - 游戏ID:', newGameId)
+        console.log('  - 当前游戏实例:', game ? 'Found' : 'null')
+        console.log('  - 引擎游戏状态:', state ? 'Found' : 'null')
+        console.log('  - UI游戏状态:', gameState)
+        
+        if (!game || !state) {
+          console.log('⚠️ 状态同步未完成，稍后重试...')
+          setTimeout(() => forceSync(attempts + 1), 1000)
+        } else {
+          console.log('✅ 游戏状态同步成功')
+        }
+      }
+      
+      setTimeout(() => forceSync(), 100)
+      
+    } catch (error) {
+      console.error('游戏创建失败:', error)
+      toast.error('游戏创建失败，使用模拟模式')
+      
+      // 回退到简化模式
+      initializeSimpleGame()
     }
   }
 
-  // 分配角色
-  const assignRoles = (players: Player[]) => {
-    const roles: RoleType[] = ['werewolf', 'werewolf', 'seer', 'witch', 'hunter', 'guard', 'villager', 'villager']
-    const shuffledRoles = [...roles].sort(() => Math.random() - 0.5)
-    
-    return players.map((player, index) => {
-      const role = shuffledRoles[index]
-      const camp = role === 'werewolf' || role === 'alpha_wolf' ? 'werewolf' : 'villager'
-      
-      return {
-        ...player,
-        role,
-        camp
-      }
-    })
-  }
-
-  // 初始化游戏
-  const initializeGame = () => {
-    const players = Array.from({ length: 8 }, (_, i) => generateRandomPlayer(i, i === 0))
-    const playersWithRoles = assignRoles(players)
+  // 简化模式（备用）
+  const initializeSimpleGame = () => {
+    console.log('🔄 启动简化游戏模式...')
     
     const gameId = Math.random().toString(36).substring(2, 9)
     
@@ -112,9 +170,9 @@ const WerewolfGameView: FC = () => {
       currentRound: 1,
       currentPhase: 'preparation',
       isGameActive: true,
-      players: playersWithRoles,
+      players: [],
       phaseStartTime: Date.now(),
-      phaseTimeLimit: 30, // 30秒准备时间
+      phaseTimeLimit: 10,
       gameLogs: [{
         id: '1',
         round: 0,
@@ -125,28 +183,116 @@ const WerewolfGameView: FC = () => {
       }]
     })
     
-    // 设置当前玩家（真人玩家）
-    setCurrentPlayer(playersWithRoles[0])
-    
-    // 显示角色分配
-    setTimeout(() => {
-      setShowRoles(true)
-      toast.success(`你的身份是：${ROLE_CONFIGS[playersWithRoles[0].role].name}`)
-    }, 1000)
-    
-    // 开始第一个夜晚
-    setTimeout(() => {
-      startNightPhase()
-    }, 5000)
+    toast('使用简化游戏模式，AI功能有限', { icon: 'ℹ️' })
   }
 
-  // 开始夜晚阶段
-  const startNightPhase = () => {
+  // 同步游戏引擎状态到本地状态 - 只在关键状态变化时同步
+  useEffect(() => {
+    if (engineGameState && gameId) {
+      // 检查是否需要更新状态（防止无限循环）
+      const needsUpdate = 
+        gameState.gameId !== engineGameState.gameId ||
+        gameState.currentPhase !== engineGameState.currentPhase ||
+        gameState.currentRound !== engineGameState.currentRound ||
+        gameState.players.length !== engineGameState.players.length ||
+        !gameState.isGameActive
+        
+      if (needsUpdate) {
+        console.log('🔄 同步游戏引擎状态到UI:', {
+          phase: engineGameState.currentPhase,
+          round: engineGameState.currentRound,
+          players: engineGameState.players.length,
+          active: engineGameState.isActive
+        })
+        
+        // 获取正确的阶段时间限制
+        const phaseTimeLimit = engineGameState.phaseTimeLimit || 30
+        
+        // 更新本地状态
+        setGameState(prev => ({
+          ...prev,
+          gameId: engineGameState.gameId,
+          currentRound: engineGameState.currentRound,
+          currentPhase: engineGameState.currentPhase as any,
+          isGameActive: true, // 游戏引擎运行时，游戏应该是激活状态
+          players: engineGameState.players as any[],
+          phaseStartTime: engineGameState.phaseStartTime || Date.now(),
+          phaseTimeLimit: phaseTimeLimit
+        }))
+        
+        console.log(`📊 状态已同步 - 阶段: ${engineGameState.currentPhase}, 时间限制: ${phaseTimeLimit}秒`)
+        
+              // 查找真人玩家
+      const humanPlayer = engineGameState.players.find(p => p.isPlayer)
+      if (humanPlayer && humanPlayer.role) {
+        setCurrentPlayer(humanPlayer as any)
+        
+        // 显示角色信息（只在第一次设置时显示）
+        if (!currentPlayer || currentPlayer.role !== humanPlayer.role) {
+          const roleConfig = ROLE_CONFIGS[humanPlayer.role as keyof typeof ROLE_CONFIGS]
+          if (roleConfig) {
+            toast.success(`你的身份是：${roleConfig.name}`)
+          }
+        }
+      }
+      }
+    }
+  }, [
+    engineGameState?.gameId,
+    engineGameState?.currentPhase, 
+    engineGameState?.currentRound,
+    engineGameState?.players?.length,
+    gameId,
+    gameState.gameId,
+    gameState.currentPhase,
+    gameState.currentRound,
+    gameState.isGameActive
+  ])
+
+  // 监听阶段变化，执行相应的游戏逻辑
+  useEffect(() => {
+    console.log(`🎮 阶段监听 - 当前阶段: ${currentPhase}, 游戏激活: ${gameState.isGameActive}`)
+    
+    if (!gameState.isGameActive) {
+      console.log('⚠️ 游戏未激活，跳过阶段逻辑执行')
+      return
+    }
+
+    console.log(`✅ 执行阶段逻辑: ${currentPhase}`)
+    
+    switch (currentPhase) {
+      case 'preparation':
+        console.log('📋 准备阶段：游戏引擎会自动检查角色分配完成后转换...')
+        break
+      case 'night':
+        handleNightPhase()
+        break
+      case 'day_discussion':
+        handleDayDiscussionPhase()
+        break
+      case 'day_voting':
+        handleVotingPhase()
+        break
+    }
+  }, [currentPhase, gameState.isGameActive])
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => {
+      console.log('🧹 WerewolfGameView 组件卸载，清理资源...')
+      if (gameId && currentGame) {
+        // 清理游戏资源
+        console.log('🧹 清理游戏实例:', gameId)
+      }
+    }
+  }, [])
+
+  // 处理夜晚阶段
+  const handleNightPhase = () => {
+    console.log('🌙 进入夜晚阶段')
+    
     setGameState(prev => ({
       ...prev,
-      currentPhase: 'night',
-      phaseStartTime: Date.now(),
-      phaseTimeLimit: 120, // 2分钟夜晚时间
       gameLogs: [...prev.gameLogs, {
         id: Date.now().toString(),
         round: prev.currentRound,
@@ -165,16 +311,15 @@ const WerewolfGameView: FC = () => {
 
   // 模拟AI夜晚行动
   const simulateNightActions = () => {
-    // 这里可以实现具体的AI逻辑
+    console.log('🐺 AI夜晚行动')
+    // 这里实现具体的AI逻辑
     // 现在先简单模拟一下
-    
-    setTimeout(() => {
-      startDayDiscussion()
-    }, 5000)
   }
 
-  // 开始白天讨论
-  const startDayDiscussion = () => {
+  // 处理白天讨论阶段
+  const handleDayDiscussionPhase = () => {
+    console.log('☀️ 进入白天讨论阶段')
+    
     // 随机选择一个玩家"死亡"（模拟狼人杀人）
     const aliveVillagers = alivePlayers.filter(p => p.camp === 'villager')
     if (aliveVillagers.length > 0) {
@@ -182,9 +327,6 @@ const WerewolfGameView: FC = () => {
       
       setGameState(prev => ({
         ...prev,
-        currentPhase: 'day_discussion',
-        phaseStartTime: Date.now(),
-        phaseTimeLimit: 180, // 3分钟讨论时间
         players: prev.players.map(p => 
           p.id === victim.id ? { ...p, status: 'dead' } : p
         ),
@@ -200,26 +342,40 @@ const WerewolfGameView: FC = () => {
       }))
       
       toast.error(`${victim.name} 在夜里被狼人杀死了`)
+      
+      // 触发AI讨论
+      setTimeout(() => {
+        generateAIDiscussion()
+      }, 2000)
     }
-    
-    // 触发AI讨论
-    setTimeout(() => {
-      generateAIDiscussion()
-    }, 2000) // 2秒后开始AI讨论
-    
-    // 自动进入投票阶段
-    setTimeout(() => {
-      startVotingPhase()
-    }, 15000) // 15秒后进入投票（给AI讨论更多时间）
   }
 
-  // 开始投票阶段
-  const startVotingPhase = () => {
+  // 人类玩家推进到下一阶段
+  const advanceToNextPhase = async () => {
+    if (!gameId || !currentPlayer) return
+    
+    try {
+      // 通过游戏引擎强制推进阶段
+      console.log('👤 玩家主动推进到下一阶段')
+      
+      await executeAction(gameId, currentPlayer.id, {
+        type: 'advance_phase'
+      })
+      
+      toast.success('推进到下一阶段')
+      
+    } catch (error) {
+      console.error('推进阶段失败:', error)
+      toast.error('推进失败，请重试')
+    }
+  }
+
+  // 处理投票阶段
+  const handleVotingPhase = () => {
+    console.log('🗳️ 进入投票阶段')
+    
     setGameState(prev => ({
       ...prev,
-      currentPhase: 'day_voting',
-      phaseStartTime: Date.now(),
-      phaseTimeLimit: 60, // 1分钟投票时间
       votes: [], // 清空之前的投票
       players: prev.players.map(p => ({ ...p, hasVoted: false, votesReceived: 0 })),
       gameLogs: [...prev.gameLogs, {
@@ -231,34 +387,35 @@ const WerewolfGameView: FC = () => {
         isPublic: true
       }]
     }))
-  }
 
-  // 处理投票
-  const handleVote = (targetId: string) => {
-    if (!currentPlayer || !canVote) return
-    
-    const vote = {
-      voterId: currentPlayer.id,
-      targetId,
-      timestamp: Date.now()
-    }
-    
-    setGameState(prev => ({
-      ...prev,
-      votes: [...prev.votes, vote],
-      players: prev.players.map(p => 
-        p.id === currentPlayer.id ? { ...p, hasVoted: true, votedFor: targetId } :
-        p.id === targetId ? { ...p, votesReceived: p.votesReceived + 1 } : p
-      )
-    }))
-    
-    const targetPlayer = alivePlayers.find(p => p.id === targetId)
-    toast.success(`已投票给 ${targetPlayer?.name}`)
+    toast('开始投票！选择要出局的玩家', { icon: '🗳️' })
     
     // 模拟AI投票
     setTimeout(() => {
       simulateAIVotes()
     }, 1000)
+  }
+
+  // 处理投票
+  const handleVote = async (targetId: string) => {
+    if (!currentPlayer || !canVote || !gameId) return
+    
+    try {
+      // 使用游戏引擎处理投票
+      await executeAction(gameId, currentPlayer.id, {
+        type: 'vote',
+        targetId
+      })
+      
+      const targetPlayer = alivePlayers.find(p => p.id === targetId)
+      toast.success(`已投票给 ${targetPlayer?.name}`)
+      
+      console.log('🗳️ 投票已提交到游戏引擎')
+      
+    } catch (error) {
+      console.error('投票失败:', error)
+      toast.error('投票失败，请重试')
+    }
   }
 
   // 模拟AI投票
@@ -349,18 +506,8 @@ const WerewolfGameView: FC = () => {
       await new Promise(resolve => setTimeout(resolve, i * 2000)) // 每2秒一个AI发言
       
       try {
-        let speech: AISpeechResult
-        if (aiGameService.isAIEnabled()) {
-          speech = await aiGameService.generateAISpeech(ai, gameState, '讨论阶段')
-        } else {
-          // 备用发言
-          const messages = ['我需要仔细观察', '这很可疑', '让我想想', '有什么线索吗？']
-          speech = {
-            message: messages[Math.floor(Math.random() * messages.length)],
-            emotion: 'neutral',
-            confidence: 0.5
-          }
-        }
+        // 使用真实的AI服务生成发言
+        const speech = await aiGameService.generateAISpeech(ai, gameState, '讨论阶段')
         
         const chatMessage: ChatMessage = {
           id: Date.now().toString() + ai.id,
@@ -376,6 +523,8 @@ const WerewolfGameView: FC = () => {
         
       } catch (error) {
         console.error(`AI ${ai.name} 发言失败:`, error)
+        // 如果AI发言失败，记录错误但不显示mock消息
+        console.warn(`跳过AI ${ai.name}的发言，等待下次触发`)
       }
     }
   }
@@ -405,11 +554,45 @@ const WerewolfGameView: FC = () => {
   }
 
   // 重新开始游戏
-  const restartGame = () => {
-    setIsGameInitialized(false)
-    setShowRoles(false)
-    setCurrentPlayer(null)
-    setChatMessages([])
+  const restartGame = async () => {
+    console.log('🔄 重新开始游戏...')
+    
+    try {
+      // 如果当前有游戏实例，先清理
+      if (currentGame && gameId) {
+        console.log('🧹 清理旧游戏实例...')
+        // 这里可以添加清理游戏的逻辑
+      }
+      
+      // 重置本地状态
+      setIsGameInitialized(false)
+      setShowRoles(false)
+      setCurrentPlayer(null)
+      setChatMessages([])
+      setGameId('')
+      setAiConfig(null)
+      
+      // 重置游戏状态原子
+      setGameState(initialGameState)
+      
+      // 清空错误状态
+      if (error) {
+        clearError()
+      }
+      
+      toast('游戏重新开始，身份重新分配', { icon: '🔄' })
+      
+      // 等待状态清理完成，然后重新初始化
+      setTimeout(async () => {
+        console.log('🚀 开始重新初始化游戏...')
+        await initializeGame()
+        setIsGameInitialized(true)
+      }, 200)
+      
+    } catch (error) {
+      console.error('重启游戏失败:', error)
+      toast.error('重启游戏失败，请刷新页面重试')
+    }
   }
 
   return (
@@ -442,8 +625,14 @@ const WerewolfGameView: FC = () => {
               villagerCount={villagerPlayers.length}
             />
             
+            {/* 玩家身份显示 */}
+            <RoleDisplay player={currentPlayer} />
+            
             {/* AI配置面板 */}
             <AIConfigPanel onConfigUpdate={setAiConfig} />
+            
+            {/* LLM测试面板 */}
+            <LLMTestPanel />
             
             {/* 控制按钮 */}
             <div className="space-y-2">
@@ -451,8 +640,18 @@ const WerewolfGameView: FC = () => {
                 onClick={() => setShowRoles(!showRoles)}
                 className="w-full bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
               >
-                {showRoles ? '隐藏身份' : '显示身份'}
+                {showRoles ? '关闭上帝视角' : '开启上帝视角'}
               </button>
+              
+              {/* 推进阶段按钮 */}
+              {currentPlayer && gameState.isGameActive && (
+                <button
+                  onClick={advanceToNextPhase}
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                >
+                  推进到下一阶段 ⏩
+                </button>
+              )}
               
               <button
                 onClick={restartGame}
@@ -474,6 +673,24 @@ const WerewolfGameView: FC = () => {
 
           {/* 中央游戏区域 */}
           <div className="lg:col-span-2">
+            {/* AI状态显示 */}
+            {(aiStreamingActive || aiThinking.size > 0) && (
+              <div className="bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/20 dark:to-pink-900/20 
+                            rounded-lg border border-purple-200 dark:border-purple-700 p-4 mb-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <div className="animate-pulse text-purple-600">🤖</div>
+                  <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-100">
+                    AI正在思考...
+                  </h3>
+                </div>
+                {Array.from(aiThinking.entries()).map(([playerId, content]) => (
+                  <div key={playerId} className="text-xs text-purple-700 dark:text-purple-300 mb-1">
+                    <span className="font-medium">{playerId}:</span> {content}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {alivePlayers.map((player) => (
                 <PlayerCard
@@ -484,7 +701,11 @@ const WerewolfGameView: FC = () => {
                   hasVoted={currentPlayer?.hasVoted || false}
                   votesReceived={voteResults[player.id] || 0}
                   onVote={handleVote}
-                  showRole={showRoles || gameState.currentPhase === 'game_over'}
+                  showRole={
+                    (player.id === currentPlayer?.id) || // 显示自己的身份
+                    (showRoles) || // 管理员模式显示所有身份
+                    (gameState.currentPhase === 'game_over') // 游戏结束显示所有身份
+                  }
                 />
               ))}
             </div>
@@ -553,6 +774,51 @@ const WerewolfGameView: FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
+        
+        {/* 调试面板 */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed top-4 right-4 bg-black/80 text-white p-4 rounded-lg text-sm max-w-sm z-50">
+            <h3 className="font-bold mb-2">🔧 调试信息</h3>
+            <div>游戏ID: {gameId}</div>
+            <div>当前阶段: {currentPhase}</div>
+            <div>游戏激活: {gameState.isGameActive ? '✅' : '❌'}</div>
+            <div>剩余时间: {remainingTime}秒</div>
+            <div>引擎状态: {engineGameState ? '✅' : '❌'}</div>
+            <div>游戏实例: {currentGame ? '✅' : '❌'}</div>
+            {engineGameState && (
+              <div>
+                <div>引擎阶段: {engineGameState.currentPhase}</div>
+                <div>引擎激活: {engineGameState.isActive ? '✅' : '❌'}</div>
+                <div>引擎时间: {engineGameState.phaseTimeLimit}秒</div>
+              </div>
+            )}
+            
+            {/* 强制刷新按钮 */}
+            <div className="mt-2 space-y-1">
+              <button
+                onClick={() => {
+                  console.log('🔄 强制状态检查...')
+                  console.log('当前游戏实例:', currentGame)
+                  console.log('引擎状态:', engineGameState)
+                  console.log('UI状态:', gameState)
+                }}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded"
+              >
+                检查状态
+              </button>
+              
+              <button
+                onClick={() => {
+                  console.log('🔄 手动刷新游戏状态...')
+                  refreshGameState()
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded"
+              >
+                刷新状态
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

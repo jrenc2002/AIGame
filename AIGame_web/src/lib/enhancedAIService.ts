@@ -3,7 +3,7 @@
 
 import { generateText } from 'ai'
 import { openai } from '@ai-sdk/openai'
-import { getAIConfig, validateAIConfig } from './aiConfig'
+import { getAPIConfig, getValidAPIKey, hasValidAPIConfig } from './apiConfig'
 import { Player, GameState, GamePhase, RoleType, NightAction } from '@/store/werewolf/types'
 import { 
   buildWerewolfPrompt, 
@@ -49,8 +49,8 @@ class EnhancedAIWerewolfService {
   private isConfigValid: boolean = false
 
   constructor() {
-    this.config = getAIConfig()
-    this.isConfigValid = validateAIConfig(this.config)
+    this.config = getAPIConfig()
+    this.isConfigValid = hasValidAPIConfig('openai')
   }
 
   /**
@@ -62,7 +62,7 @@ class EnhancedAIWerewolfService {
     gameState: GameState,
     context: string = ''
   ): Promise<EnhancedAISpeech> {
-    const hasRealAPI = this.hasValidAPIKey()
+    const hasRealAPI = hasValidAPIConfig('openai')
     
     if (!this.isConfigValid || !hasRealAPI) {
       return this.getIntelligentFallbackSpeech(player, gameState, context)
@@ -70,10 +70,11 @@ class EnhancedAIWerewolfService {
 
     try {
       const prompt = buildWerewolfPrompt(player, gameState, context)
+      const apiKey = getValidAPIKey('openai')!
       
       const { text } = await generateText({
         model: openai(this.config.openaiModel, {
-          apiKey: this.config.openaiApiKey,
+          apiKey: apiKey,
           baseURL: this.config.openaiBaseUrl,
         }),
         prompt: prompt + '\n\n请用以下格式回复：\nMESSAGE: [发言内容]\nEMOTION: [情感]\nCONFIDENCE: [置信度]',
@@ -98,7 +99,7 @@ class EnhancedAIWerewolfService {
     availableTargets: Player[],
     actionType: 'vote' | 'kill' | 'check' | 'save' | 'poison' | 'guard' | 'shoot'
   ): Promise<EnhancedAIDecision> {
-    const hasRealAPI = this.hasValidAPIKey()
+    const hasRealAPI = hasValidAPIConfig('openai')
     
     if (!this.isConfigValid || !hasRealAPI) {
       return this.getIntelligentFallbackDecision(player, gameState, availableTargets, actionType)
@@ -106,10 +107,11 @@ class EnhancedAIWerewolfService {
 
     try {
       const prompt = buildDecisionPrompt(player, gameState, availableTargets, actionType)
+      const apiKey = getValidAPIKey('openai')!
       
       const { text } = await generateText({
         model: openai(this.config.openaiModel, {
-          apiKey: this.config.openaiApiKey,
+          apiKey: apiKey,
           baseURL: this.config.openaiBaseUrl,
         }),
         prompt,
@@ -176,7 +178,7 @@ class EnhancedAIWerewolfService {
     const context = this.buildRoleRevealContext(player, roleToReveal, information)
     const prompt = buildWerewolfPrompt(player, gameState, context)
     
-    const hasRealAPI = this.hasValidAPIKey()
+    const hasRealAPI = hasValidAPIConfig('openai')
     
     if (!this.isConfigValid || !hasRealAPI) {
       return this.getFallbackRoleRevealSpeech(player, roleToReveal, information)
@@ -185,7 +187,7 @@ class EnhancedAIWerewolfService {
     try {
       const { text } = await generateText({
         model: openai(this.config.openaiModel, {
-          apiKey: this.config.openaiApiKey,
+          apiKey: getValidAPIKey('openai')!,
           baseURL: this.config.openaiBaseUrl,
         }),
         prompt: prompt + '\n\n请跳出身份并报告信息，格式：\nMESSAGE: [跳身份的发言]\nEMOTION: [情感]\nCONFIDENCE: [置信度]',
@@ -201,12 +203,6 @@ class EnhancedAIWerewolfService {
   }
 
   // =============== 私有方法 ===============
-
-  private hasValidAPIKey(): boolean {
-    return this.config.openaiApiKey !== 'fallback_ai_mode' && 
-           this.config.openaiApiKey !== 'your_openai_api_key_here' && 
-           this.config.openaiApiKey.length > 10
-  }
 
   private parseEnhancedSpeechResponse(
     response: string, 
@@ -463,7 +459,7 @@ class EnhancedAIWerewolfService {
     
     let message = '我需要仔细观察情况...'
     let emotion: any = 'neutral'
-    let confidence = 0.6
+    const confidence = 0.6
     
     // 根据阶段和角色生成fallback发言
     if (phase === 'day_discussion') {

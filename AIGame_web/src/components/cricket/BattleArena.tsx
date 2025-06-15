@@ -35,9 +35,9 @@ export const BattleArena: FC<BattleArenaProps> = ({ battleState, setBattleState 
       }
 
       // 判断先手（速度高的先攻击）
-      let newPlayer = { ...player }
-      let newEnemy = { ...enemy }
-      let newLog = [...battleState.battleLog]
+      const newPlayer = { ...player }
+      const newEnemy = { ...enemy }
+      const newLog = [...battleState.battleLog]
 
       const playerFirst = player.speed >= enemy.speed
 

@@ -212,19 +212,21 @@ export function buildNightActionPrompt(player: Player, gameState: GameState): st
   const basePrompt = buildWerewolfPrompt(player, gameState, '夜晚行动阶段')
   
   switch (player.role) {
-    case 'werewolf':
+    case 'werewolf': {
       const werewolfTargets = gameState.players.filter(p => 
         p.status === 'alive' && p.camp === 'villager'
       )
       return buildDecisionPrompt(player, gameState, werewolfTargets, 'kill')
+    }
       
-    case 'seer':
+    case 'seer': {
       const seerTargets = gameState.players.filter(p => 
         p.status === 'alive' && p.id !== player.id
       )
       return buildDecisionPrompt(player, gameState, seerTargets, 'check')
+    }
       
-    case 'witch':
+    case 'witch': {
       // 女巫的行动比较复杂，需要考虑救人和毒人
       const deadTonight = gameState.players.filter(p => 
         p.status === 'dead' && !p.isSaved
@@ -237,12 +239,14 @@ export function buildNightActionPrompt(player: Player, gameState: GameState): st
         )
         return buildDecisionPrompt(player, gameState, poisonTargets, 'poison')
       }
+    }
       
-    case 'guard':
+    case 'guard': {
       const guardTargets = gameState.players.filter(p => 
         p.status === 'alive' && p.id !== player.id
       )
       return buildDecisionPrompt(player, gameState, guardTargets, 'guard')
+    }
       
     default:
       return basePrompt + '\n\n你没有夜晚行动，请等待其他玩家完成行动。'

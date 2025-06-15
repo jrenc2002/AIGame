@@ -25,7 +25,7 @@ const defaultGameSettings: GameSettings = {
 }
 
 // 初始游戏状态
-const initialGameState: GameState = {
+export const initialGameState: GameState = {
   gameId: '',
   currentRound: 0,
   currentPhase: 'preparation',
@@ -42,6 +42,9 @@ const initialGameState: GameState = {
 
 // 主要游戏状态原子
 export const gameStateAtom = atom<GameState>(initialGameState)
+
+// 游戏日志原子
+export const gameLogsAtom = atom<GameLog[]>([])
 
 // 当前玩家原子（真人玩家）
 export const currentPlayerAtom = atom<Player | null>(null)
@@ -102,9 +105,21 @@ export const voteResultsAtom = atom<Record<string, number>>((get) => {
 
 // 游戏胜负判定原子
 export const gameWinnerAtom = atom<CampType | null>((get) => {
+  const gameState = get(gameStateAtom)
   const alivePlayers = get(alivePlayersAtom)
+  
+  // 如果游戏未激活或没有玩家，不判断胜负
+  if (!gameState.isGameActive || alivePlayers.length === 0) {
+    return null
+  }
+  
   const werewolves = alivePlayers.filter(p => p.camp === 'werewolf')
   const villagers = alivePlayers.filter(p => p.camp === 'villager')
+  
+  // 必须有足够的玩家才能判断胜负
+  if (alivePlayers.length < 3) {
+    return null
+  }
   
   if (werewolves.length === 0) {
     return 'villager' // 村民获胜
@@ -123,13 +138,145 @@ export const publicGameLogsAtom = atom<GameLog[]>((get) => {
   return gameState.gameLogs.filter(log => log.isPublic)
 })
 
-// 剩余时间原子
+// 时间触发器原子 - 每秒更新一次
+export const timeTickAtom = atom(0)
+
+// 剩余时间原子 - 依赖时间触发器
 export const remainingTimeAtom = atom<number>((get) => {
+  get(timeTickAtom) // 依赖时间触发器，确保每秒更新
   const gameState = get(gameStateAtom)
   const now = Date.now()
   const elapsed = Math.floor((now - gameState.phaseStartTime) / 1000)
   return Math.max(0, gameState.phaseTimeLimit - elapsed)
 })
+
+// 时间管理器原子 - 负责启动和管理定时器
+export const timeManagerAtom = atom(
+  null,
+  (get, set) => {
+    let timer: NodeJS.Timeout | null = null
+    
+    const start = () => {
+      if (timer) clearInterval(timer)
+      timer = setInterval(() => {
+        set(timeTickAtom, prev => prev + 1)
+        
+        // 检查是否需要自动转换阶段
+        const gameState = get(gameStateAtom)
+        const remainingTime = get(remainingTimeAtom)
+        
+        if (remainingTime <= 0 && gameState.isGameActive) {
+          // 触发阶段转换
+          set(phaseTransitionAtom)
+        }
+      }, 1000)
+    }
+    
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer)
+        timer = null
+      }
+    }
+    
+    return { start, stop }
+  }
+)
+
+// 阶段转换原子
+export const phaseTransitionAtom = atom(
+  null,
+  (get, set) => {
+    const gameState = get(gameStateAtom)
+    const currentPhase = gameState.currentPhase
+    
+    console.log(`🔄 状态机转换: ${currentPhase} -> ?`)
+    
+    let nextPhase: GamePhase
+    let nextDuration: number
+    
+    switch (currentPhase) {
+      case 'preparation':
+        nextPhase = 'night'
+        nextDuration = 30 // 30秒夜晚（调试用）
+        console.log(`🔄 转换到: 夜晚阶段 (${nextDuration}秒)`)
+        break
+      case 'night': {
+        nextPhase = 'day_discussion'
+        nextDuration = 45 // 45秒讨论（调试用）
+        console.log(`🔄 转换到: 白天讨论阶段 (${nextDuration}秒)`)
+        break
+      }
+      case 'day_discussion': {
+        nextPhase = 'day_voting'
+        nextDuration = 30 // 30秒投票（调试用）
+        console.log(`🔄 转换到: 投票阶段 (${nextDuration}秒)`)
+        break
+      }
+      case 'day_voting': {
+        // 处理投票结果
+        const votes = gameState.votes
+        const voteCount = new Map<string, number>()
+        
+        // 统计票数
+        votes.forEach(vote => {
+          voteCount.set(vote.targetId, (voteCount.get(vote.targetId) || 0) + 1)
+        })
+        
+        // 找出得票最多的玩家
+        let maxVotes = 0
+        let eliminatedPlayerId = ''
+        voteCount.forEach((count, playerId) => {
+          if (count > maxVotes) {
+            maxVotes = count
+            eliminatedPlayerId = playerId
+          }
+        })
+        
+        // 更新游戏状态
+        nextPhase = 'night'
+        nextDuration = 30 // 30秒夜晚（调试用）
+        
+        set(gameStateAtom, {
+          ...gameState,
+          currentRound: gameState.currentRound + 1,
+          currentPhase: nextPhase,
+          phaseStartTime: Date.now(),
+          phaseTimeLimit: nextDuration,
+          players: gameState.players.map(p => 
+            p.id === eliminatedPlayerId ? { ...p, status: 'dead' } : p
+          ),
+          deadPlayers: [...gameState.deadPlayers, ...gameState.players.filter(p => p.id === eliminatedPlayerId)],
+          votes: [], // 清空投票
+          nightActions: [], // 清空夜晚行动
+          gameLogs: [...gameState.gameLogs, {
+            id: Date.now().toString(),
+            round: gameState.currentRound,
+            phase: 'day_voting',
+            action: eliminatedPlayerId ? 
+              `投票结束，${gameState.players.find(p => p.id === eliminatedPlayerId)?.name} 被投票出局` :
+              '投票结束，没有玩家被出局',
+            timestamp: Date.now(),
+            isPublic: true
+          }]
+        })
+        
+        console.log(`🔄 投票结束，进入新一轮: 夜晚阶段 (${nextDuration}秒)`)
+        return
+      }
+      default:
+        console.log(`🔄 未知阶段: ${currentPhase}`)
+        return
+    }
+    
+    set(gameStateAtom, {
+      ...gameState,
+      currentPhase: nextPhase,
+      phaseStartTime: Date.now(),
+      phaseTimeLimit: nextDuration
+    })
+  }
+)
 
 // 是否可以投票原子
 export const canVoteAtom = atom<boolean>((get) => {

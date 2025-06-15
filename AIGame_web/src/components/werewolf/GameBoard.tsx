@@ -182,7 +182,7 @@ export const GameBoard: FC<GameBoardProps> = ({
             <div className="flex-1 bg-blue-200 dark:bg-blue-700 rounded-full h-2 relative overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${(villagerCount / alivePlayersCount) * 100}%` }}
+                animate={{ width: `${alivePlayersCount > 0 ? (villagerCount / alivePlayersCount) * 100 : 0}%` }}
                 className="bg-blue-500 h-full"
                 transition={{ duration: 0.5 }}
               />
@@ -201,7 +201,7 @@ export const GameBoard: FC<GameBoardProps> = ({
             <div className="flex-1 bg-red-200 dark:bg-red-700 rounded-full h-2 relative overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${(werewolfCount / alivePlayersCount) * 100}%` }}
+                animate={{ width: `${alivePlayersCount > 0 ? (werewolfCount / alivePlayersCount) * 100 : 0}%` }}
                 className="bg-red-500 h-full"
                 transition={{ duration: 0.5 }}
               />
