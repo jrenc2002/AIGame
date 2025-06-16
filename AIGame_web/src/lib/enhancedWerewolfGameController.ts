@@ -2,7 +2,7 @@
 // 整合LLM-Werewolf的专业游戏流程
 
 import { GameState, Player, RoleType, GamePhase, Vote } from '@/store/werewolf/types'
-import { enhancedAIWerewolfService, EnhancedAIDecision, EnhancedAISpeech } from './enhancedAIService'
+import { aiGameService, AIDecisionResult as EnhancedAIDecision, AISpeechResult as EnhancedAISpeech } from './aiService'
 
 // 夜晚行动结果
 interface NightActionResult {
@@ -27,6 +27,8 @@ export class EnhancedWerewolfGameController {
   private config: GameControllerConfig
   private nightActionResults: NightActionResult[] = []
   private eventCallbacks: Map<string, Array<(...args: any[]) => void>> = new Map()
+  private isPaused: boolean = false
+  private pendingPhaseTransition: (() => void) | null = null
 
   constructor(initialGameState: GameState, config?: Partial<GameControllerConfig>) {
     this.gameState = initialGameState
@@ -89,11 +91,18 @@ export class EnhancedWerewolfGameController {
    * 启动夜晚阶段
    */
   async startNightPhase(): Promise<void> {
+    // 检查AI服务是否可用
+    if (!aiGameService.isAIEnabled()) {
+      this.pauseGameForAPI('夜晚阶段需要AI服务，但当前AI服务不可用', () => this.startNightPhase())
+      return
+    }
+
     this.gameState.currentPhase = 'night'
     this.gameState.phaseStartTime = Date.now()
     this.gameState.phaseTimeLimit = this.config.nightActionTimeout
     
     this.addGameLog('🌙 夜晚降临，特殊角色开始行动...', true)
+    console.log(`🎮 进入夜晚阶段 - 第${this.gameState.currentRound}轮`)
     this.emit('STATE_UPDATE', this.gameState)
 
     try {
@@ -109,7 +118,7 @@ export class EnhancedWerewolfGameController {
       
     } catch (error) {
       console.error('夜晚阶段执行失败:', error)
-      this.addGameLog('❌ 夜晚行动出现异常', true)
+      this.pauseGameForAPI('夜晚阶段AI服务出现错误', () => this.startNightPhase())
     }
   }
 
@@ -133,7 +142,7 @@ export class EnhancedWerewolfGameController {
     if (villagers.length === 0) return
 
     const alphaWolf = werewolves[0]
-    const decision = await enhancedAIWerewolfService.generateEnhancedAIDecision(
+    const decision = await aiGameService.generateAIDecision(
       alphaWolf,
       this.gameState,
       villagers,
@@ -153,7 +162,7 @@ export class EnhancedWerewolfGameController {
     const targets = alivePlayers.filter(p => p.id !== seer.id)
     if (targets.length === 0) return
 
-    const decision = await enhancedAIWerewolfService.generateEnhancedAIDecision(seer, this.gameState, targets, 'check')
+    const decision = await aiGameService.generateAIDecision(seer, this.gameState, targets, 'check')
 
     if (decision.target) {
       const target = targets.find(t => t.id === decision.target)
@@ -175,7 +184,7 @@ export class EnhancedWerewolfGameController {
     } else if (!witch.hasUsedSkill && Math.random() < 0.3) {
       const potentialTargets = alivePlayers.filter(p => p.id !== witch.id)
       if (potentialTargets.length > 0) {
-        const decision = await enhancedAIWerewolfService.generateEnhancedAIDecision(witch, this.gameState, potentialTargets, 'poison')
+        const decision = await aiGameService.generateAIDecision(witch, this.gameState, potentialTargets, 'poison')
         if (decision.target) {
           this.nightActionResults.push({ playerId: witch.id, action: 'poison', target: decision.target, success: true })
           this.addGameLog(`☠️ 女巫使用毒药: ${this.getPlayerName(decision.target)}`, false)
@@ -191,7 +200,7 @@ export class EnhancedWerewolfGameController {
     const targets = alivePlayers.filter(p => p.id !== guard.id)
     if (targets.length === 0) return
 
-    const decision = await enhancedAIWerewolfService.generateEnhancedAIDecision(guard, this.gameState, targets, 'guard')
+    const decision = await aiGameService.generateAIDecision(guard, this.gameState, targets, 'guard')
 
     if (decision.target) {
       this.nightActionResults.push({ playerId: guard.id, action: 'guard', target: decision.target, success: true })
@@ -235,6 +244,7 @@ export class EnhancedWerewolfGameController {
     this.gameState.phaseTimeLimit = this.config.discussionTimeout
 
     this.addGameLog('☀️ 天亮了，开始讨论', true)
+    console.log(`🎮 进入白天讨论阶段 - 第${this.gameState.currentRound}轮`)
     this.emit('STATE_UPDATE', this.gameState)
 
     const winner = this.checkGameEnd()
@@ -274,18 +284,42 @@ export class EnhancedWerewolfGameController {
   }
 
   private async generateAIDiscussion(): Promise<void> {
-    const aiPlayers = this.gameState.players.filter(p => p.status === 'alive' && !p.isPlayer)
+    const alivePlayers = this.gameState.players.filter(p => p.status === 'alive')
+    // 按ID排序，确保每轮都是相同的发言顺序
+    alivePlayers.sort((a, b) => parseInt(a.id) - parseInt(b.id))
 
-    for (const ai of aiPlayers) {
+    // 轮流发言，从第一个玩家到最后一个玩家
+    for (const player of alivePlayers) {
       try {
-        const context = `第${this.gameState.currentRound}轮讨论，分析昨晚的情况`
-        const speech = await enhancedAIWerewolfService.generateEnhancedAISpeech(ai, this.gameState, context)
-        this.addChatMessage(ai.id, speech.message, speech.emotion)
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000))
+        if (player.isPlayer) {
+          // 人类玩家暂时跳过，可以手动发言
+          continue
+        }
+
+        const context = `第${this.gameState.currentRound}轮讨论，你是第${parseInt(player.id)}号玩家，请分析昨晚的情况并发表看法`
+        
+        // 检查AI是否可用
+        if (!aiGameService.isAIEnabled()) {
+          this.pauseGameForAPI('讨论阶段需要AI服务，但当前AI服务不可用', () => this.generateAIDiscussion())
+          return
+        }
+
+        const speech = await aiGameService.generateAISpeech(player, this.gameState, context)
+        this.addChatMessage(player.id, speech.message, speech.emotion)
+        
+        // 添加发言日志
+        this.addGameLog(`💬 ${player.name}: ${speech.message}`, true)
+        
+        // 轮流发言间隔2-4秒，模拟真实思考时间
+        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000))
       } catch (error) {
-        console.error(`AI ${ai.name} 发言失败:`, error)
+        console.error(`AI ${player.name} 发言失败:`, error)
+        this.pauseGameForAPI(`AI ${player.name} 发言失败，可能是API服务问题`, () => this.generateAIDiscussion())
+        return
       }
     }
+    
+    console.log('🗣️ 本轮AI讨论完成')
   }
 
   async startVotingPhase(): Promise<void> {
@@ -302,12 +336,18 @@ export class EnhancedWerewolfGameController {
   }
 
   private async executeAIVotes(): Promise<void> {
+    // 检查AI服务是否可用
+    if (!aiGameService.isAIEnabled()) {
+      this.pauseGameForAPI('投票阶段需要AI服务，但当前AI服务不可用', () => this.executeAIVotes())
+      return
+    }
+
     const aiPlayers = this.gameState.players.filter(p => p.status === 'alive' && !p.isPlayer && !p.hasVoted)
 
     for (const ai of aiPlayers) {
       try {
         const availableTargets = this.gameState.players.filter(p => p.status === 'alive' && p.id !== ai.id)
-        const decision = await enhancedAIWerewolfService.generateEnhancedAIDecision(ai, this.gameState, availableTargets, 'vote')
+        const decision = await aiGameService.generateAIDecision(ai, this.gameState, availableTargets, 'vote')
         
         if (decision.target) {
           this.addVote(ai.id, decision.target)
@@ -316,6 +356,8 @@ export class EnhancedWerewolfGameController {
         await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
       } catch (error) {
         console.error(`AI ${ai.name} 投票失败:`, error)
+        this.pauseGameForAPI(`AI ${ai.name} 投票失败，可能是API服务问题`, () => this.executeAIVotes())
+        return
       }
     }
   }
@@ -361,7 +403,7 @@ export class EnhancedWerewolfGameController {
     const alivePlayers = this.gameState.players.filter(p => p.status === 'alive')
     if (alivePlayers.length === 0) return
 
-    const decision = await enhancedAIWerewolfService.generateEnhancedAIDecision(hunter, this.gameState, alivePlayers, 'shoot')
+    const decision = await aiGameService.generateAIDecision(hunter, this.gameState, alivePlayers, 'shoot')
 
     if (decision.target) {
       const target = this.getPlayerById(decision.target)
@@ -457,11 +499,16 @@ export class EnhancedWerewolfGameController {
       timestamp: Date.now(),
       isAI: !player.isPlayer
     }
+    
+    // 同时记录到游戏日志中，供AI上下文使用
+    this.addGameLog(`💬 ${player.name}: ${message}`, true)
+    
     this.emit('CHAT_MESSAGE', chatMessage)
   }
 
   private emit(event: string, data?: any): void {
-    (this.eventCallbacks.get(event) || []).forEach(cb => cb(data))
+    console.log(`🔊 事件发出: ${event}`, data ? `数据: ${JSON.stringify(data, null, 2)}` : '')
+    ;(this.eventCallbacks.get(event) || []).forEach(cb => cb(data))
   }
 
   // 公开接口
@@ -482,6 +529,74 @@ export class EnhancedWerewolfGameController {
   public handlePlayerMessage = (playerId: string, message: string) => {
     if (this.gameState.currentPhase === 'day_discussion') {
       this.addChatMessage(playerId, message, 'neutral')
+    }
+  }
+
+  /**
+   * 暂停游戏等待API恢复
+   */
+  private pauseGameForAPI(reason: string, retryCallback: () => void): void {
+    this.isPaused = true
+    this.pendingPhaseTransition = retryCallback
+    
+    // 更新游戏状态
+    this.gameState.isPaused = true
+    this.gameState.pauseReason = reason
+    
+    this.addGameLog(`⏸️ 游戏暂停: ${reason}`, true)
+    
+    // 触发暂停事件，通知UI显示API测试弹窗
+    this.emit('GAME_PAUSED', {
+      reason,
+      needsAPIConfig: true
+    })
+    
+    this.emit('STATE_UPDATE', this.gameState)
+  }
+
+  /**
+   * 恢复游戏
+   */
+  public resumeGame(): void {
+    if (this.isPaused && this.pendingPhaseTransition) {
+      this.isPaused = false
+      
+      // 更新游戏状态
+      this.gameState.isPaused = false
+      this.gameState.pauseReason = undefined
+      
+      this.addGameLog('▶️ 游戏恢复', true)
+      this.emit('GAME_RESUMED')
+      this.emit('STATE_UPDATE', this.gameState)
+      
+      // 执行之前暂停的操作
+      const callback = this.pendingPhaseTransition
+      this.pendingPhaseTransition = null
+      callback()
+    }
+  }
+
+  /**
+   * 检查游戏是否暂停
+   */
+  public isGamePaused(): boolean {
+    return this.isPaused
+  }
+
+  /**
+   * 强制重试AI操作
+   */
+  public retryAIOperation(): void {
+    if (this.isPaused) {
+      // 刷新AI服务配置
+      aiGameService.refreshAIConfiguration()
+      
+      if (aiGameService.isAIEnabled()) {
+        this.resumeGame()
+      } else {
+        this.addGameLog('❌ AI服务仍不可用，请检查配置', true)
+        this.emit('API_TEST_FAILED', { message: 'AI服务配置无效' })
+      }
     }
   }
 }

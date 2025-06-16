@@ -198,11 +198,21 @@ ${actionPrompts[actionType]}
 
 可选目标：${targetList}
 
-请做出决策并说明理由。回复格式：
-TARGET: [目标玩家ID]
-REASONING: [推理过程，30字以内]
-CONFIDENCE: [0.1-1.0的置信度]
-MESSAGE: [向其他玩家解释的话，20字以内]`
+请做出决策并说明理由。必须按照以下JSON格式回复，不要包含任何其他内容：
+
+{
+  "target": "目标玩家ID（必须是可选目标中的一个）",
+  "reasoning": "推理过程（30字以内）",
+  "confidence": 0.8,
+  "message": "向其他玩家解释的话（20字以内）",
+  "emotion": "confident"
+}
+
+注意：
+1. target必须是可选目标列表中玩家的ID
+2. confidence必须是0.1-1.0之间的数字
+3. emotion可选值：neutral, suspicious, defensive, aggressive, confident
+4. 只返回JSON对象，不要包含其他解释文字`
 }
 
 /**

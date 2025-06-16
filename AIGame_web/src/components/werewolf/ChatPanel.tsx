@@ -115,11 +115,11 @@ export const ChatPanel: FC<ChatPanelProps> = ({
       {/* 消息列表 */}
       <div className="h-64 overflow-y-auto p-4 space-y-3">
         <AnimatePresence>
-          {messages.map((message) => {
-            const player = alivePlayers.find(p => p.id === message.playerId)
+          {messages.map((message, index) => {
+            const player = alivePlayers?.find(p => p.id === message.playerId)
             return (
               <motion.div
-                key={message.id}
+                key={`${message.id}-${message.timestamp}-${index}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -136,7 +136,7 @@ export const ChatPanel: FC<ChatPanelProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {message.playerName}
+                      {message.playerName || '未知玩家'}
                     </span>
                     {message.isAI && (
                       <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded">

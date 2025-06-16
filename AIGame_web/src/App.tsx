@@ -14,7 +14,6 @@ import HomeView from '@/view/HomeView.tsx';
 import SettingView from '@/view/SettingView';
 import CyberCricketFightView from '@/view/CyberCricketFightView';
 import WerewolfGameView from '@/view/WerewolfGameView';
-import EnhancedWerewolfGameView from '@/view/EnhancedWerewolfGameView';
 
 function App() {
 
@@ -48,7 +47,7 @@ const MainContent = () => {
                             <Route path="/setting" element={<SettingView />} />
                             <Route path="/cyber-cricket" element={<CyberCricketFightView />} />
                             <Route path="/werewolf" element={<WerewolfGameView />} />
-                            <Route path="/werewolf-enhanced" element={<EnhancedWerewolfGameView />} />
+                            <Route path="/werewolf-enhanced" element={<WerewolfGameView />} />
                         </Routes>
                     </div>
                 </div>

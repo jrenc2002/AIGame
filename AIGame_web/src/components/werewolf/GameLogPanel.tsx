@@ -15,9 +15,9 @@ export const GameLogPanel: FC = () => {
       <h3 className="mb-2 text-lg font-semibold text-white">游戏日志</h3>
       <div className="space-y-2">
         <AnimatePresence>
-          {publicLogs.map((log) => (
+          {publicLogs.map((log, index) => (
             <motion.div
-              key={log.id}
+              key={`${log.id}-${log.timestamp}-${index}`}
               layout
               initial={{ opacity: 0, y: 20, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}

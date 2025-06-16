@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { getAPIConfig, hasValidAPIConfig } from '@/lib/apiConfig'
-import { enhancedAIWerewolfService } from '@/lib/enhancedAIService'
+import { enhancedAIWerewolfService } from '@/lib/aiService'
 import toast from 'react-hot-toast'
 
 export const LLMTestPanel: React.FC = () => {
@@ -68,7 +68,7 @@ export const LLMTestPanel: React.FC = () => {
         }
       }
 
-      const result = await enhancedAIWerewolfService.generateEnhancedAISpeech(
+      const result = await enhancedAIWerewolfService.generateAISpeech(
         testPlayer, 
         testGameState, 
         '这是一个LLM连接测试'

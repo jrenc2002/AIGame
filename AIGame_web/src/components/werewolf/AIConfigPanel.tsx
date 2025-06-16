@@ -1,6 +1,6 @@
 import { type FC, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { AIConfig, getAIConfig, validateAIConfig } from '@/lib/aiConfig'
+import { AIConfig, getAPIConfig as getAIConfig } from '@/lib/apiConfig'
 import { aiGameService } from '@/lib/aiService'
 import toast from 'react-hot-toast'
 
@@ -18,7 +18,7 @@ export const AIConfigPanel: FC<AIConfigPanelProps> = ({
   const [isTestingConnection, setIsTestingConnection] = useState(false)
 
   // 检查配置状态
-  const isConfigValid = validateAIConfig(config)
+  const isConfigValid = config.enabled && config.openaiApiKey && config.openaiApiKey !== 'fallback_ai_mode'
   const isAIEnabled = aiGameService.isAIEnabled()
 
   useEffect(() => {

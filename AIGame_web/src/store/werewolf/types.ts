@@ -82,6 +82,7 @@ export interface NightAction {
 
 // 投票信息接口
 export interface Vote {
+  id: string
   voterId: string
   targetId: string
   timestamp: number
@@ -97,6 +98,7 @@ export interface GameLog {
   targetId?: string
   timestamp: number
   isPublic: boolean // 是否对所有玩家可见
+  data?: any // 额外数据
 }
 
 // 游戏状态接口
@@ -106,6 +108,8 @@ export interface GameState {
   currentRound: number
   currentPhase: GamePhase
   isGameActive: boolean
+  isPaused?: boolean
+  pauseReason?: string
   winner?: CampType
   
   // 玩家信息
