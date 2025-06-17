@@ -7,7 +7,11 @@ import { Player, GameState, RoleType, GamePhase } from '@/store/werewolf/types'
  * 狼人杀核心系统提示词
  * 采用9人全禁房规则，借鉴LLM-Werewolf项目的专业设定
  */
-export const WEREWOLF_SYSTEM_PROMPT = `你是一个文字推理游戏"狼人杀"的游戏玩家，狼人杀的游戏说明和规则如下：
+export const WEREWOLF_SYSTEM_PROMPT = `你是一个文字推理游戏"狼人杀"的游戏玩家。
+
+⚠️ 重要格式要求：你的所有回复都必须是严格的JSON格式，不要包含任何解释文字、代码块标记或其他内容。
+
+狼人杀的游戏说明和规则如下：
 
 ### 玩家与角色设置 ###
 游戏共9个玩家参与，分别扮演5种角色，其中，1个玩家扮演预言家，1个玩家扮演女巫，1个玩家扮演猎人，3个玩家扮演村民，3个玩家扮演狼人。
@@ -167,7 +171,20 @@ ${gameInfo}
 
 额外上下文：${context}
 
-请根据以上信息，以你的角色身份和性格特征做出合适的反应。发言要简洁有力（20-40字），符合角色设定。`
+请根据以上信息，以你的角色身份和性格特征做出合适的反应。必须按照以下JSON格式回复：
+
+{
+  "message": "你的发言内容（20-40字，符合角色设定）",
+  "emotion": "confident",
+  "confidence": 0.8,
+  "suspiciousness": 0.3,
+  "persuasiveness": 0.7
+}
+
+注意：
+1. emotion可选值：neutral, suspicious, defensive, aggressive, confident
+2. confidence, suspiciousness, persuasiveness都是0.0-1.0之间的数字
+3. 只返回JSON对象，不要包含其他解释文字`
 }
 
 /**
@@ -201,18 +218,28 @@ ${actionPrompts[actionType]}
 请做出决策并说明理由。必须按照以下JSON格式回复，不要包含任何其他内容：
 
 {
-  "target": "目标玩家ID（必须是可选目标中的一个）",
+  "target": "玩家ID（只填写数字，如: 3）",
   "reasoning": "推理过程（30字以内）",
   "confidence": 0.8,
   "message": "向其他玩家解释的话（20字以内）",
   "emotion": "confident"
 }
 
-注意：
-1. target必须是可选目标列表中玩家的ID
-2. confidence必须是0.1-1.0之间的数字
-3. emotion可选值：neutral, suspicious, defensive, aggressive, confident
-4. 只返回JSON对象，不要包含其他解释文字`
+重要注意事项：
+1. target字段只能填写纯数字ID，不要包含玩家名称或括号
+2. 可选目标ID：${availableTargets.map(p => p.id).join(', ')}
+3. confidence必须是0.1-1.0之间的数字
+4. emotion可选值：neutral, suspicious, defensive, aggressive, confident
+5. 只返回标准JSON格式，不要添加任何解释文字或代码块标记
+
+示例正确格式：
+{
+  "target": "3",
+  "reasoning": "此玩家行为可疑",
+  "confidence": 0.8,
+  "message": "我觉得3号有问题",
+  "emotion": "suspicious"
+}`
 }
 
 /**
@@ -264,7 +291,7 @@ export function buildNightActionPrompt(player: Player, gameState: GameState): st
 }
 
 /**
- * 验证AI响应格式
+ * 解析AI的JSON响应
  */
 export function parseAIResponse(response: string): {
   target?: string
@@ -272,23 +299,61 @@ export function parseAIResponse(response: string): {
   confidence?: number
   message?: string
   emotion?: string
+  suspiciousness?: number
+  persuasiveness?: number
 } {
-  const lines = response.split('\n').filter(line => line.trim())
-  const result: any = {}
-  
-  for (const line of lines) {
-    if (line.startsWith('TARGET:')) {
-      result.target = line.replace('TARGET:', '').trim()
-    } else if (line.startsWith('REASONING:')) {
-      result.reasoning = line.replace('REASONING:', '').trim()
-    } else if (line.startsWith('CONFIDENCE:')) {
-      result.confidence = parseFloat(line.replace('CONFIDENCE:', '').trim()) || 0.5
-    } else if (line.startsWith('MESSAGE:')) {
-      result.message = line.replace('MESSAGE:', '').trim()
-    } else if (line.startsWith('EMOTION:')) {
-      result.emotion = line.replace('EMOTION:', '').trim()
+  try {
+    // 首先尝试直接解析JSON
+    const cleanResponse = response.trim()
+    let jsonStr = cleanResponse
+    
+    // 如果响应包含代码块标记，提取JSON部分
+    if (cleanResponse.includes('```json')) {
+      const match = cleanResponse.match(/```json\s*([\s\S]*?)\s*```/)
+      if (match) {
+        jsonStr = match[1].trim()
+      }
+    } else if (cleanResponse.includes('```')) {
+      const match = cleanResponse.match(/```\s*([\s\S]*?)\s*```/)
+      if (match) {
+        jsonStr = match[1].trim()
+      }
     }
+    
+    // 尝试解析JSON
+    const parsed = JSON.parse(jsonStr)
+    
+    // 验证并返回结果
+    return {
+      target: parsed.target?.toString() || undefined,
+      reasoning: parsed.reasoning?.toString() || undefined,
+      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+      message: parsed.message?.toString() || undefined,
+      emotion: parsed.emotion?.toString() || 'neutral',
+      suspiciousness: typeof parsed.suspiciousness === 'number' ? parsed.suspiciousness : undefined,
+      persuasiveness: typeof parsed.persuasiveness === 'number' ? parsed.persuasiveness : undefined
+    }
+  } catch (error) {
+    console.warn('JSON解析失败，尝试文本格式解析:', error)
+    
+    // 后备解析：支持原有的文本格式
+    const lines = response.split('\n').filter(line => line.trim())
+    const result: any = {}
+    
+    for (const line of lines) {
+      if (line.startsWith('TARGET:')) {
+        result.target = line.replace('TARGET:', '').trim()
+      } else if (line.startsWith('REASONING:')) {
+        result.reasoning = line.replace('REASONING:', '').trim()
+      } else if (line.startsWith('CONFIDENCE:')) {
+        result.confidence = parseFloat(line.replace('CONFIDENCE:', '').trim()) || 0.5
+      } else if (line.startsWith('MESSAGE:')) {
+        result.message = line.replace('MESSAGE:', '').trim()
+      } else if (line.startsWith('EMOTION:')) {
+        result.emotion = line.replace('EMOTION:', '').trim()
+      }
+    }
+    
+    return result
   }
-  
-  return result
 } 

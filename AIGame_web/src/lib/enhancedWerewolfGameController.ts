@@ -3,6 +3,7 @@
 
 import { GameState, Player, RoleType, GamePhase, Vote } from '@/store/werewolf/types'
 import { aiGameService, AIDecisionResult as EnhancedAIDecision, AISpeechResult as EnhancedAISpeech } from './aiService'
+import { RobustJSONParser } from './ai/RobustJSONParser'
 
 // 夜晚行动结果
 interface NightActionResult {
@@ -142,6 +143,10 @@ export class EnhancedWerewolfGameController {
     if (villagers.length === 0) return
 
     const alphaWolf = werewolves[0]
+    
+    console.log(`🐺 狼人行动 - 头狼: ${alphaWolf.name}(${alphaWolf.id})`)
+    console.log(`🎯 可选目标:`, villagers.map(v => `${v.name}(${v.id})`))
+    
     const decision = await aiGameService.generateAIDecision(
       alphaWolf,
       this.gameState,
@@ -149,9 +154,19 @@ export class EnhancedWerewolfGameController {
       'kill'
     )
 
+    console.log(`🎯 狼人决策结果:`, decision)
+
     if (decision.target) {
-      this.nightActionResults.push({ playerId: alphaWolf.id, action: 'kill', target: decision.target, success: true })
-      this.addGameLog(`🐺 狼人选择了目标: ${this.getPlayerName(decision.target)}`, false, { target: decision.target, reasoning: decision.reasoning })
+      const targetPlayer = this.getPlayerById(decision.target)
+      if (targetPlayer) {
+        this.nightActionResults.push({ playerId: alphaWolf.id, action: 'kill', target: decision.target, success: true })
+        this.addGameLog(`🐺 狼人选择了目标: ${targetPlayer.name}`, false, { target: decision.target, reasoning: decision.reasoning })
+        console.log(`✅ 狼人杀人目标确认: ${targetPlayer.name}(${targetPlayer.id})`)
+      } else {
+        console.error(`❌ 狼人目标无效: ${decision.target}`)
+      }
+    } else {
+      console.warn(`⚠️ 狼人未选择目标`)
     }
   }
 

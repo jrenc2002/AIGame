@@ -2,6 +2,7 @@ import { CoreMessage } from 'ai'
 import { BaseAIService, AIResponse, AIStreamResponse, AIServiceConfig } from './BaseAIService'
 import { Player, GameState, RoleType, GamePhase } from '@/store/werewolf/types'
 import { buildWerewolfPrompt, buildDecisionPrompt, parseAIResponse } from '../werewolfPrompts'
+import { RobustJSONParser } from './RobustJSONParser'
 
 // 狼人杀AI决策结果
 export interface WerewolfAIDecision {
@@ -289,12 +290,30 @@ export class WerewolfAIService extends BaseAIService {
    * 解析AI发言响应
    */
   private parseSpeechResponse(response: AIResponse): WerewolfAISpeech {
-    return {
-      message: response.content.trim(),
-      emotion: this.extractEmotion(response.content),
-      confidence: response.confidence,
-      suspiciousness: this.calculateSuspiciousness(response.content),
-      persuasiveness: this.calculatePersuasiveness(response.content)
+    console.log('🎤 解析AI发言响应:', response)
+    
+    try {
+      // 使用鲁棒JSON解析器
+      const parsed = RobustJSONParser.parseAIResponse(response.content)
+      
+      return {
+        message: parsed.message || response.content.trim(),
+        emotion: parsed.emotion || this.extractEmotion(response.content),
+        confidence: parsed.confidence || response.confidence,
+        suspiciousness: parsed.suspiciousness || this.calculateSuspiciousness(response.content),
+        persuasiveness: parsed.persuasiveness || this.calculatePersuasiveness(response.content)
+      }
+    } catch (error) {
+      console.warn('🚨 AI发言解析完全失败，使用后备结果:', error)
+      
+      // 后备解析：使用原有逻辑
+      return {
+        message: response.content.trim(),
+        emotion: this.extractEmotion(response.content),
+        confidence: response.confidence,
+        suspiciousness: this.calculateSuspiciousness(response.content),
+        persuasiveness: this.calculatePersuasiveness(response.content)
+      }
     }
   }
 
@@ -306,31 +325,70 @@ export class WerewolfAIService extends BaseAIService {
     availableTargets: Player[],
     actionType: string
   ): WerewolfAIDecision {
-    const parsed = parseAIResponse(response.content)
+    console.log(`🎯 解析AI决策响应 (${actionType}):`, response)
     
-    // 查找目标
-    let target: string | undefined
-    if (parsed.target) {
-      const foundTarget = availableTargets.find(p => 
-        p.name.includes(parsed.target!) || p.id === parsed.target
-      )
-      target = foundTarget?.id
-    }
-    
-    // 如果没有找到有效目标，随机选择一个
-    if (!target && availableTargets.length > 0) {
-      target = availableTargets[Math.floor(Math.random() * availableTargets.length)].id
-    }
-
-    return {
-      action: actionType as any,
-      target,
-      reasoning: parsed.reasoning || '基于当前局势的判断',
-      confidence: response.confidence,
-      message: parsed.message || response.content.trim(),
-      emotion: this.extractEmotion(response.content),
-      strategicValue: 0.7,
-      riskLevel: 0.5
+    try {
+      // 使用鲁棒JSON解析器
+      const parsed = RobustJSONParser.parseAIResponse(response.content)
+      console.log('✅ 鲁棒解析成功:', parsed)
+      
+      // 验证目标是否有效
+      let validTarget = parsed.target
+      if (validTarget) {
+        // 从目标字符串中提取ID（处理"玩家名(ID)"格式）
+        const idMatch = validTarget.match(/\((\d+)\)/)
+        if (idMatch) {
+          validTarget = idMatch[1]
+        }
+        
+        // 检查目标是否在可选列表中
+        const targetExists = availableTargets.find(t => 
+          t.id === validTarget || t.name === validTarget
+        )
+        if (!targetExists) {
+          console.warn(`⚠️ 无效目标: ${validTarget}，可选目标:`, availableTargets.map(t => `${t.name}(${t.id})`))
+          validTarget = availableTargets[0]?.id
+        } else {
+          console.log(`✅ 有效目标确认: ${validTarget}`)
+        }
+      } else {
+        // 如果没有指定目标，随机选择一个
+        validTarget = availableTargets[0]?.id
+        console.warn(`⚠️ 未指定目标，随机选择: ${validTarget}`)
+      }
+      
+      const result = {
+        action: actionType as any,
+        target: validTarget,
+        reasoning: parsed.reasoning || '基于当前局势的判断',
+        confidence: parsed.confidence || 0.5,
+        message: parsed.message || `我选择${actionType}`,
+        emotion: parsed.emotion as any || 'neutral',
+        strategicValue: 0.5,
+        riskLevel: 0.5
+      }
+      
+      console.log(`🎯 ${actionType}决策结果:`, result)
+      return result
+      
+    } catch (error) {
+      console.error(`🚨 ${actionType}决策解析完全失败:`, error)
+      
+      // 最终后备方案
+      const fallbackTarget = availableTargets[0]?.id
+      const fallbackResult = {
+        action: actionType as any,
+        target: fallbackTarget,
+        reasoning: '解析失败，使用默认选择',
+        confidence: 0.3,
+        message: `系统自动选择${actionType}`,
+        emotion: 'neutral' as any,
+        strategicValue: 0.3,
+        riskLevel: 0.8
+      }
+      
+      console.log(`🚨 使用后备决策:`, fallbackResult)
+      return fallbackResult
     }
   }
 

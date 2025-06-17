@@ -22,6 +22,9 @@ import {
 import type { Player, GameState, GameLog, GamePhase } from '@/store/werewolf/types'
 import { AIConfig } from '@/lib/apiConfig'
 import { EnhancedWerewolfGameController } from '@/lib/enhancedWerewolfGameController'
+import { JSONTestHelper } from '@/lib/debug/jsonTestHelper'
+import { RobustJSONParser } from '@/lib/ai/RobustJSONParser'
+import { AIResponseTester } from '@/lib/ai/AIResponseTester'
 
 const WerewolfGameView: FC = () => {
   const [gameState, setGameState] = useAtom(gameStateAtom)
