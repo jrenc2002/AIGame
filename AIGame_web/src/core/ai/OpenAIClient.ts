@@ -40,8 +40,8 @@ interface OpenAIStreamResponse {
 export class OpenAIClient extends AIClient {
   constructor(config: AIClientConfig) {
     super({
-      baseURL: 'https://api.openai.com/v1',
-      model: 'gpt-3.5-turbo',
+      baseURL: 'https://api.openai-next.com/v1',
+      model: 'gpt-4o-mini',
       temperature: 0.7,
       topP: 1.0,
       maxTokens: 2000,
@@ -231,8 +231,8 @@ export class OpenAIClient extends AIClient {
 
   getSupportedModels(): string[] {
     return [
-      'gpt-3.5-turbo',
-      'gpt-3.5-turbo-16k',
+      'deepseek-r1',
+      'deepseek-r1-16k',
       'gpt-4',
       'gpt-4-turbo-preview',
       'gpt-4o',

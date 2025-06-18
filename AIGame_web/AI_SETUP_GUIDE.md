@@ -23,8 +23,8 @@
 VITE_OPENAI_API_KEY=sk-your-actual-openai-api-key-here
 
 # 可选配置
-VITE_OPENAI_MODEL=gpt-3.5-turbo
-VITE_OPENAI_BASE_URL=https://api.openai.com/v1
+VITE_OPENAI_MODEL=deepseek-r1
+VITE_OPENAI_BASE_URL=https://api.openai-next.com/v1
 VITE_AI_MAX_TOKENS=800
 VITE_AI_TEMPERATURE=0.8
 ```
@@ -67,7 +67,7 @@ VITE_AI_TEMPERATURE=0.8
 **解决方案**：
 - 检查OpenAI账户余额
 - 降低`VITE_AI_MAX_TOKENS`值（如设为400）
-- 考虑使用更便宜的模型（如`gpt-3.5-turbo`）
+- 考虑使用更便宜的模型（如`deepseek-r1`）
 
 ## 🎯 验证配置
 
@@ -80,7 +80,7 @@ VITE_AI_TEMPERATURE=0.8
 ## 💡 优化建议
 
 ### 模型选择
-- **gpt-3.5-turbo**：速度快，成本低，推荐日常使用
+- **deepseek-r1**：速度快，成本低，推荐日常使用
 - **gpt-4**：更智能，但成本较高
 
 ### Token控制
@@ -114,7 +114,7 @@ VITE_OPENAI_BASE_URL=https://your-proxy-url.com/v1
 
 ## 📊 成本估算
 
-以GPT-3.5-turbo为例：
+以deepseek-r1为例：
 - 每局游戏约消耗 3000-5000 tokens
 - 成本约 $0.003-0.005 USD
 - 玩100局约花费 $0.3-0.5 USD

@@ -17,8 +17,8 @@
 # AI配置
 VITE_AI_ENABLED=true
 VITE_OPENAI_API_KEY=your_actual_openai_api_key_here
-VITE_OPENAI_MODEL=gpt-3.5-turbo
-VITE_OPENAI_BASE_URL=https://api.openai.com/v1
+VITE_OPENAI_MODEL=deepseek-r1
+VITE_OPENAI_BASE_URL=https://api.openai-next.com/v1
 VITE_AI_MAX_TOKENS=1000
 VITE_AI_TEMPERATURE=0.7
 ```

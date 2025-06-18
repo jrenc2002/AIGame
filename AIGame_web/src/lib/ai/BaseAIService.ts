@@ -29,58 +29,52 @@ export interface AIServiceConfig {
 // 基础AI服务类
 export abstract class BaseAIService {
   protected config: AIServiceConfig
-  protected isEnabled: boolean = false
 
   constructor(config?: Partial<AIServiceConfig>) {
-    const apiConfig = getAPIConfig()
+    // 先使用不抛出错误的方式获取配置
+    const apiConfig = getAPIConfig(false)
     
     this.config = {
       provider: 'openai',
-      model: apiConfig.openaiModel || 'gpt-3.5-turbo',
-      maxTokens: apiConfig.maxTokens || 1000,
+      model: apiConfig.openaiModel || 'gpt-4o-mini',
+      maxTokens: apiConfig.maxTokens || 2000,
       temperature: apiConfig.temperature || 0.7,
       timeout: 30000,
       ...config
     }
     
-    this.isEnabled = this.validateConfiguration()
+    // 延迟验证配置 - 只有在实际使用时才验证
+    console.log('🚀 AI服务初始化完成（延迟验证配置）')
   }
 
   /**
-   * 验证AI配置是否有效
+   * 验证AI配置是否有效 - 失败时直接抛出错误
    */
-  protected validateConfiguration(): boolean {
+  protected validateConfiguration(): void {
     try {
-      const hasValidConfig = hasValidAPIConfig('openai')
-      const hasValidKey = getValidAPIKey('openai') !== null
-      
-      if (!hasValidConfig || !hasValidKey) {
-        console.warn(`AI服务未启用: OpenAI 配置无效`)
-        return false
-      }
-      
-      return true
+      hasValidAPIConfig('openai')
+      getValidAPIKey('openai')
+      console.log('✅ AI服务配置验证成功')
     } catch (error) {
-      console.error('AI配置验证失败:', error)
-      return false
+      console.error('❌ AI服务配置验证失败:', error)
+      throw new Error(`AI服务配置无效: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
 
   /**
-   * 获取AI模型实例
+   * 获取AI模型实例 - 在这里验证配置
    */
   protected getModel() {
+    // 每次使用时验证配置
+    this.validateConfiguration()
+    
     const apiKey = getValidAPIKey('openai')
-    if (!apiKey) {
-      throw new Error(`无效的OpenAI API密钥`)
-    }
-
     const apiConfig = getAPIConfig()
     
     // 创建OpenAI客户端实例
     const openaiClient = createOpenAI({
       apiKey: apiKey,
-      baseURL: apiConfig.openaiBaseUrl || 'https://api.openai.com/v1'
+      baseURL: apiConfig.openaiBaseUrl || 'https://api.openai-next.com/v1'
     })
 
     // 返回指定模型
@@ -88,14 +82,11 @@ export abstract class BaseAIService {
   }
 
   /**
-   * 非流式AI调用
+   * 非流式AI调用 - 失败时直接抛出错误
    */
   async generateResponse(messages: CoreMessage[]): Promise<AIResponse> {
-    if (!this.isEnabled) {
-      throw new Error('AI服务未启用，请检查配置')
-    }
-
     try {
+      console.log(`🤖 AI调用开始 - 模型: ${this.config.model}`)
       const model = this.getModel()
       const result = await generateText({
         model,
@@ -104,31 +95,31 @@ export abstract class BaseAIService {
         temperature: this.config.temperature,
       })
 
+      console.log(`✅ AI调用成功 - 响应长度: ${result.text.length}`)
       return {
         content: result.text,
         confidence: this.calculateConfidence(result.text),
         metadata: {
           finishReason: result.finishReason,
-          usage: result.usage
+          usage: result.usage,
+          model: this.config.model,
+          isRealAI: true
         }
       }
     } catch (error) {
-      console.error('AI生成失败:', error)
-      throw this.handleAIError(error)
+      console.error('❌ AI生成失败:', error)
+      throw new Error(`AI调用失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
 
   /**
-   * 流式AI调用
+   * 流式AI调用 - 失败时直接抛出错误
    */
   async *generateStreamResponse(
     messages: CoreMessage[]
   ): AsyncGenerator<AIStreamResponse, void, unknown> {
-    if (!this.isEnabled) {
-      throw new Error('AI服务未启用，请检查配置')
-    }
-
     try {
+      console.log(`🤖 AI流式调用开始 - 模型: ${this.config.model}`)
       const model = this.getModel()
       const stream = await streamText({
         model,
@@ -149,14 +140,15 @@ export abstract class BaseAIService {
       }
 
       // 最终响应
+      console.log(`✅ AI流式调用成功 - 总长度: ${content.length}`)
       yield {
         content,
         isComplete: true
       }
       
     } catch (error) {
-      console.error('AI流式生成失败:', error)
-      throw this.handleAIError(error)
+      console.error('❌ AI流式生成失败:', error)
+      throw new Error(`AI流式调用失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
 
@@ -179,33 +171,23 @@ export abstract class BaseAIService {
   }
 
   /**
-   * 处理AI错误
-   */
-  protected handleAIError(error: any): Error {
-    if (error.message?.includes('rate limit')) {
-      return new Error('AI请求频率超限，请稍后重试')
-    }
-    if (error.message?.includes('insufficient_quota')) {
-      return new Error('AI配额不足，请检查账户余额')
-    }
-    if (error.message?.includes('invalid_api_key')) {
-      return new Error('AI密钥无效，请检查配置')
-    }
-    
-    return new Error(`AI服务错误: ${error.message || '未知错误'}`)
-  }
-
-  /**
    * 检查AI服务是否可用
    */
-  isAIEnabled(): boolean {
-    return this.isEnabled
+  async isAvailable(): Promise<boolean> {
+    try {
+      await this.generateResponse([
+        { role: 'user', content: '测试连接' }
+      ])
+      return true
+    } catch {
+      return false
+    }
   }
 
   /**
-   * 重新验证配置
+   * 刷新配置
    */
   refreshConfiguration(): void {
-    this.isEnabled = this.validateConfiguration()
+    this.validateConfiguration()
   }
 } 

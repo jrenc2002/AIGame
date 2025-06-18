@@ -17,7 +17,7 @@ AI狼人杀游戏集成了OpenAI GPT模型，为每个AI角色提供：
 ```bash
 # OpenAI API 配置
 VITE_OPENAI_API_KEY=your_openai_api_key_here
-VITE_OPENAI_MODEL=gpt-3.5-turbo
+VITE_OPENAI_MODEL=deepseek-r1
 VITE_OPENAI_BASE_URL=https://api.openai-next.com/v1
 
 # AI 功能配置
@@ -31,7 +31,7 @@ VITE_AI_TEMPERATURE=0.7
 | 参数 | 说明 | 默认值 | 示例 |
 |------|------|--------|------|
 | `VITE_OPENAI_API_KEY` | OpenAI API密钥 | 无 | `sk-...` |
-| `VITE_OPENAI_MODEL` | 使用的GPT模型 | `gpt-3.5-turbo` | `gpt-4` |
+| `VITE_OPENAI_MODEL` | 使用的GPT模型 | `deepseek-r1` | `gpt-4` |
 | `VITE_OPENAI_BASE_URL` | API基础URL | `https://api.openai-next.com/v1` | 自定义API端点 |
 | `VITE_AI_ENABLED` | 是否启用AI功能 | `false` | `true` |
 | `VITE_AI_MAX_TOKENS` | 最大Token数 | `1000` | `1500` |

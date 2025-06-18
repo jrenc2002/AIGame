@@ -4,25 +4,49 @@ import { Player } from '@/store/werewolf/types'
 import { ROLE_CONFIGS } from '@/store/werewolf/gameState'
 
 interface RoleDisplayProps {
-  player: Player | null
+  player?: Player | null
+  role?: string
+  show?: boolean
+  onClose?: () => void
   className?: string
 }
 
 export const RoleDisplay: FC<RoleDisplayProps> = ({ 
-  player, 
+  player,
+  role,
+  show = true,
+  onClose,
   className = '' 
 }) => {
-  if (!player) return null
-
-  const roleConfig = ROLE_CONFIGS[player.role]
+  if (!show) return null
+  
+  let roleConfig
+  const currentRole = player?.role || role || 'villager'
+  
+  if (ROLE_CONFIGS[currentRole as keyof typeof ROLE_CONFIGS]) {
+    roleConfig = ROLE_CONFIGS[currentRole as keyof typeof ROLE_CONFIGS]
+  } else {
+    roleConfig = ROLE_CONFIGS.villager
+  }
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
       className={`bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 
-                  rounded-lg border-2 border-purple-200 dark:border-purple-700 p-4 ${className}`}
+                  rounded-lg border-2 border-purple-200 dark:border-purple-700 p-4 relative ${className}`}
     >
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 transition-colors"
+          title="关闭"
+        >
+          ✕
+        </button>
+      )}
+      
       <div className="text-center">
         <div className="text-3xl mb-2">{roleConfig.icon}</div>
         <h3 className="text-lg font-bold text-purple-900 dark:text-purple-100 mb-1">
@@ -36,7 +60,6 @@ export const RoleDisplay: FC<RoleDisplayProps> = ({
           {roleConfig.description}
         </p>
         
-        {/* 技能说明 */}
         <div className="text-left">
           <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
             技能：
@@ -51,7 +74,6 @@ export const RoleDisplay: FC<RoleDisplayProps> = ({
           </ul>
         </div>
         
-        {/* 胜利条件 */}
         <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
           <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
             胜利条件：

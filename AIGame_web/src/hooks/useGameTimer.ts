@@ -24,7 +24,7 @@ export function useGameTimer() {
     return () => {
       manager.stop()
     }
-  }, [gameState.isGameActive, gameState.currentPhase, setTimeManager])
+  }, [gameState.isGameActive, gameState.currentPhase, gameState.phaseTimeLimit, setTimeManager])
 
   // 当阶段变化时重置计时器
   useEffect(() => {
@@ -32,7 +32,7 @@ export function useGameTimer() {
       setTimeTick(0) // 重置时间触发器
       console.log(`⏰ 阶段切换到: ${gameState.currentPhase}，持续时间: ${gameState.phaseTimeLimit}秒`)
     }
-  }, [gameState.currentPhase, gameState.phaseStartTime, setTimeTick])
+  }, [gameState.isGameActive, gameState.currentPhase, gameState.phaseStartTime, gameState.phaseTimeLimit, setTimeTick])
 
   return {
     remainingTime,

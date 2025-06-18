@@ -173,8 +173,10 @@ export class WerewolfContextBuilder {
     let prompt = `当前游戏状态分析：
 - 你是：${player.name}（${player.role}）
 - 第${gameState.currentRound}轮，${gameState.currentPhase}阶段
-- 存活玩家：${alivePlayers.map(p => `${p.name}(${p.camp})`).join(', ')}
-- 死亡玩家：${deadPlayers.map(p => `${p.name}(${p.role})`).join(', ')}`
+- 存活玩家：${alivePlayers.map(p => `${p.name}(ID:${p.id})`).join(', ')}
+- 死亡玩家：${deadPlayers.map(p => `${p.name}(ID:${p.id})`).join(', ')}
+
+重要：你只知道自己的身份信息，其他玩家的身份需要通过游戏过程推断。`
 
     // 根据游戏阶段添加特定信息
     switch (gameState.currentPhase) {
@@ -201,65 +203,69 @@ export class WerewolfContextBuilder {
 export class WerewolfAIService extends BaseAIService {
   constructor(config?: Partial<AIServiceConfig>) {
     super({
-      ...config,
-      temperature: 0.8, // 狼人杀需要更多创意
-      maxTokens: 800    // 适中的回复长度
+      model: 'gpt-4o-mini',
+      maxTokens: 2000,
+      temperature: 0.8,
+      ...config
     })
   }
 
   /**
-   * 生成AI发言（非流式）
+   * 生成AI发言 - 必须返回有效的JSON格式
    */
   async generateSpeech(
     player: Player,
     gameState: GameState,
     context: string = ''
   ): Promise<WerewolfAISpeech> {
-    if (!this.isAIEnabled()) {
-      throw new Error('AI服务不可用，请配置有效的OpenAI API Key')
-    }
-
-    const messages = WerewolfContextBuilder.buildGameContext(player, gameState, context)
-    const response = await this.generateResponse(messages)
+    console.log(`🗣️ 请求AI玩家 ${player.name} 发言`)
     
-    return this.parseSpeechResponse(response)
+    const messages = WerewolfContextBuilder.buildGameContext(player, gameState, context)
+    
+    try {
+      const response = await this.generateResponse(messages)
+      console.log(`✅ 收到AI发言响应:`, response.content)
+      return this.parseSpeechResponse(response)
+    } catch (error) {
+      console.error(`❌ AI发言生成失败:`, error)
+      throw new Error(`AI发言生成失败: ${error instanceof Error ? error.message : 'unknown error'}`)
+    }
   }
 
   /**
-   * 生成AI发言（流式）
+   * 生成流式AI发言
    */
   async *generateSpeechStream(
     player: Player,
     gameState: GameState,
     context: string = ''
   ): AsyncGenerator<WerewolfAISpeech, void, unknown> {
-    if (!this.isAIEnabled()) {
-      throw new Error('AI服务不可用，请配置有效的OpenAI API Key')
-    }
-
+    console.log(`🗣️ 请求AI玩家 ${player.name} 流式发言`)
+    
     const messages = WerewolfContextBuilder.buildGameContext(player, gameState, context)
     
-    let accumulatedContent = ''
-    
-    for await (const chunk of this.generateStreamResponse(messages)) {
-      accumulatedContent = chunk.content
+    try {
+      let accumulatedContent = ''
       
-      yield {
-        message: chunk.content,
-        emotion: this.extractEmotion(chunk.content),
-        confidence: chunk.isComplete ? this.calculateConfidence(chunk.content) : 0.5,
-        suspiciousness: this.calculateSuspiciousness(chunk.content),
-        persuasiveness: this.calculatePersuasiveness(chunk.content)
+      for await (const chunk of this.generateStreamResponse(messages)) {
+        accumulatedContent = chunk.content
+        
+        if (chunk.isComplete) {
+          console.log(`✅ AI流式发言完成:`, accumulatedContent)
+          yield this.parseSpeechResponse({ 
+            content: accumulatedContent, 
+            confidence: 0.8 
+          } as AIResponse)
+        }
       }
-      
-      if (chunk.isComplete) {
-        break
-      }
+    } catch (error) {
+      console.error(`❌ AI流式发言生成失败:`, error)
+      throw new Error(`AI流式发言生成失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
 
   /**
-   * 生成AI决策
+   * 生成AI决策 - 必须返回有效的JSON格式
    */
   async generateDecision(
     player: Player,
@@ -267,128 +273,114 @@ export class WerewolfAIService extends BaseAIService {
     availableTargets: Player[],
     actionType: 'vote' | 'kill' | 'check' | 'save' | 'poison' | 'guard' | 'shoot'
   ): Promise<WerewolfAIDecision> {
-    if (!this.isAIEnabled()) {
-      throw new Error('AI服务不可用，请配置有效的OpenAI API Key')
+    console.log(`🎯 请求AI玩家 ${player.name} 做出${actionType}决策`)
+    
+    const messages = WerewolfContextBuilder.buildGameContext(player, gameState)
+    
+    // 添加决策专用提示
+    const decisionPrompt = buildDecisionPrompt(player, gameState, availableTargets, actionType)
+    messages.push({
+      role: 'user', 
+      content: decisionPrompt
+    })
+
+    try {
+      const response = await this.generateResponse(messages)
+      console.log(`✅ 收到AI决策响应:`, response.content)
+      return this.parseDecisionResponse(response, availableTargets, actionType)
+    } catch (error) {
+      console.error(`❌ AI决策生成失败:`, error)
+      throw new Error(`AI决策生成失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
-
-    const messages: CoreMessage[] = [
-      {
-        role: 'system',
-        content: buildDecisionPrompt(player, gameState, availableTargets, actionType)
-      },
-      {
-        role: 'user',
-        content: `请选择${actionType}的目标，并说明理由。可选目标：${availableTargets.map(p => `${p.name}(${p.id})`).join(', ')}`
-      }
-    ]
-
-    const response = await this.generateResponse(messages)
-    return this.parseDecisionResponse(response, availableTargets, actionType)
   }
 
   /**
-   * 解析AI发言响应
+   * 解析AI发言响应 - 必须成功解析或抛出错误
    */
   private parseSpeechResponse(response: AIResponse): WerewolfAISpeech {
-    console.log('🎤 解析AI发言响应:', response)
-    
     try {
-      // 使用鲁棒JSON解析器
-      const parsed = RobustJSONParser.parseAIResponse(response.content)
+      console.log('🔍 解析AI发言响应:', response.content)
       
-      return {
-        message: parsed.message || response.content.trim(),
-        emotion: parsed.emotion || this.extractEmotion(response.content),
-        confidence: parsed.confidence || response.confidence,
-        suspiciousness: parsed.suspiciousness || this.calculateSuspiciousness(response.content),
-        persuasiveness: parsed.persuasiveness || this.calculatePersuasiveness(response.content)
+      // 使用RobustJSONParser解析
+      const parsed = RobustJSONParser.parse(response.content)
+      
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('AI响应格式无效，不是有效的JSON对象')
       }
+
+      // 验证必需字段
+      if (!parsed.message || typeof parsed.message !== 'string') {
+        throw new Error('AI响应缺少有效的message字段')
+      }
+
+      const result: WerewolfAISpeech = {
+        message: parsed.message,
+        emotion: this.extractEmotion(parsed.emotion || 'neutral'),
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.7,
+        roleHint: parsed.roleHint,
+        suspiciousness: this.calculateSuspiciousness(parsed.message),
+        persuasiveness: this.calculatePersuasiveness(parsed.message)
+      }
+
+      console.log('✅ AI发言解析成功:', result)
+      return result
     } catch (error) {
-      console.warn('🚨 AI发言解析完全失败，使用后备结果:', error)
-      
-      // 后备解析：使用原有逻辑
-      return {
-        message: response.content.trim(),
-        emotion: this.extractEmotion(response.content),
-        confidence: response.confidence,
-        suspiciousness: this.calculateSuspiciousness(response.content),
-        persuasiveness: this.calculatePersuasiveness(response.content)
-      }
+      console.error('❌ AI发言响应解析失败:', error)
+      throw new Error(`AI发言响应解析失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
 
   /**
-   * 解析AI决策响应
+   * 解析AI决策响应 - 必须成功解析或抛出错误
    */
   private parseDecisionResponse(
     response: AIResponse,
     availableTargets: Player[],
     actionType: string
   ): WerewolfAIDecision {
-    console.log(`🎯 解析AI决策响应 (${actionType}):`, response)
-    
     try {
-      // 使用鲁棒JSON解析器
-      const parsed = RobustJSONParser.parseAIResponse(response.content)
-      console.log('✅ 鲁棒解析成功:', parsed)
+      console.log('🔍 解析AI决策响应:', response.content)
       
-      // 验证目标是否有效
-      let validTarget = parsed.target
-      if (validTarget) {
-        // 从目标字符串中提取ID（处理"玩家名(ID)"格式）
-        const idMatch = validTarget.match(/\((\d+)\)/)
-        if (idMatch) {
-          validTarget = idMatch[1]
-        }
-        
-        // 检查目标是否在可选列表中
-        const targetExists = availableTargets.find(t => 
-          t.id === validTarget || t.name === validTarget
-        )
-        if (!targetExists) {
-          console.warn(`⚠️ 无效目标: ${validTarget}，可选目标:`, availableTargets.map(t => `${t.name}(${t.id})`))
-          validTarget = availableTargets[0]?.id
+      // 使用RobustJSONParser解析
+      const parsed = RobustJSONParser.parse(response.content)
+      
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('AI决策响应格式无效，不是有效的JSON对象')
+      }
+
+      // 验证目标有效性
+      let target = parsed.target
+      if (target && !availableTargets.some(t => t.id === target || t.name === target)) {
+        // 尝试通过名称匹配
+        const matchedTarget = availableTargets.find(t => t.name === target)
+        if (matchedTarget) {
+          target = matchedTarget.id
         } else {
-          console.log(`✅ 有效目标确认: ${validTarget}`)
+          throw new Error(`AI选择的目标"${target}"不在可选列表中`)
         }
-      } else {
-        // 如果没有指定目标，随机选择一个
-        validTarget = availableTargets[0]?.id
-        console.warn(`⚠️ 未指定目标，随机选择: ${validTarget}`)
       }
-      
-      const result = {
+
+      // 验证必需字段
+      if (!parsed.reasoning || typeof parsed.reasoning !== 'string') {
+        throw new Error('AI决策响应缺少有效的reasoning字段')
+      }
+
+      const result: WerewolfAIDecision = {
         action: actionType as any,
-        target: validTarget,
-        reasoning: parsed.reasoning || '基于当前局势的判断',
-        confidence: parsed.confidence || 0.5,
-        message: parsed.message || `我选择${actionType}`,
-        emotion: parsed.emotion as any || 'neutral',
-        strategicValue: 0.5,
-        riskLevel: 0.5
+        target: target,
+        reasoning: parsed.reasoning,
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.7,
+        message: parsed.message || parsed.reasoning,
+        emotion: this.extractEmotion(parsed.emotion || 'neutral'),
+        strategicValue: parsed.strategicValue,
+        riskLevel: parsed.riskLevel
       }
-      
-      console.log(`🎯 ${actionType}决策结果:`, result)
+
+      console.log('✅ AI决策解析成功:', result)
       return result
-      
     } catch (error) {
-      console.error(`🚨 ${actionType}决策解析完全失败:`, error)
-      
-      // 最终后备方案
-      const fallbackTarget = availableTargets[0]?.id
-      const fallbackResult = {
-        action: actionType as any,
-        target: fallbackTarget,
-        reasoning: '解析失败，使用默认选择',
-        confidence: 0.3,
-        message: `系统自动选择${actionType}`,
-        emotion: 'neutral' as any,
-        strategicValue: 0.3,
-        riskLevel: 0.8
-      }
-      
-      console.log(`🚨 使用后备决策:`, fallbackResult)
-      return fallbackResult
+      console.error('❌ AI决策响应解析失败:', error)
+      throw new Error(`AI决策响应解析失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
 
@@ -396,31 +388,32 @@ export class WerewolfAIService extends BaseAIService {
    * 提取情感
    */
   private extractEmotion(content: string): WerewolfAISpeech['emotion'] {
-    if (/！|绝对|肯定|确信/.test(content)) return 'aggressive'
-    if (/怀疑|觉得|可能是/.test(content)) return 'suspicious'
-    if (/不是|没有|反对/.test(content)) return 'defensive'
-    if (/明确|清楚|一定/.test(content)) return 'confident'
-    return 'neutral'
+    const emotionMap: Record<string, WerewolfAISpeech['emotion']> = {
+      'suspicious': 'suspicious',
+      'defensive': 'defensive', 
+      'aggressive': 'aggressive',
+      'confident': 'confident',
+      'neutral': 'neutral'
+    }
+    
+    return emotionMap[content] || 'neutral'
   }
 
   /**
-   * 计算可疑度
+   * 计算怀疑度
    */
   private calculateSuspiciousness(content: string): number {
-    let suspiciousness = 0.5
-    if (/狼人|可疑|怀疑/.test(content)) suspiciousness += 0.2
-    if (/好人|相信|支持/.test(content)) suspiciousness -= 0.2
-    return Math.max(0, Math.min(1, suspiciousness))
+    const suspiciousWords = ['怀疑', '可疑', '不信', '撒谎', '假的']
+    const matches = suspiciousWords.filter(word => content.includes(word)).length
+    return Math.min(matches * 0.3, 1.0)
   }
 
   /**
    * 计算说服力
    */
   private calculatePersuasiveness(content: string): number {
-    let persuasiveness = 0.5
-    if (/因为|所以|分析|推理/.test(content)) persuasiveness += 0.2
-    if (/可能|或许|不确定/.test(content)) persuasiveness -= 0.1
-    if (content.length > 30) persuasiveness += 0.1
-    return Math.max(0, Math.min(1, persuasiveness))
+    const persuasiveWords = ['证据', '分析', '逻辑', '推理', '明显']
+    const matches = persuasiveWords.filter(word => content.includes(word)).length
+    return Math.min(0.5 + matches * 0.2, 1.0)
   }
 } 

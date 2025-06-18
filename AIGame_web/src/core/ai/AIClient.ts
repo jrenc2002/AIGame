@@ -26,6 +26,14 @@ export interface AIResponse {
   finishReason?: 'stop' | 'length' | 'content_filter'
 }
 
+export interface AIActionResponse {
+  content: string
+  action?: string
+  target?: string
+  reasoning?: string
+  confidence?: number
+}
+
 export interface StreamingAIResponse {
   content: string
   delta: string

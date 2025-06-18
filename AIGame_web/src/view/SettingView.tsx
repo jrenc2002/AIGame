@@ -1,6 +1,7 @@
 import { type FC } from 'react'
 import { useAtom } from 'jotai'
 import { themeAtom, BgKindAtom, type Theme, type BgKind } from '@/store/AppSet'
+import { AIConfigPanel } from '@/components/werewolf/AIConfigPanel'
 
 interface SocialLink {
   platform: string
@@ -13,7 +14,7 @@ interface ProjectInfo {
   name: string
   description: string
   url: string
-  stars?: number
+  stars: number
 }
 
 const SettingView: FC = () => {
@@ -74,9 +75,16 @@ const SettingView: FC = () => {
     <div className="flex max-h-screen flex-col pt-6 md:pt-8">
       <div className="container mx-auto px-4 max-w-screen-sm md:max-w-none grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 w-full">
         
-        {/* 应用设置卡片 */}
-        <div className="flex flex-col h-auto md:h-[calc(100vh-8rem)] w-full">
-          <div className="bg-white dark:bg-zinc-800 rounded-lg border border-gray-300 dark:border-zinc-600 p-4 md:p-6 shadow-lg mb-4 md:mb-6 w-full">
+        {/* 第一列：应用设置和AI配置 */}
+        <div className="flex flex-col space-y-4 md:space-y-6">
+          {/* AI配置卡片 */}
+          <div className="bg-white dark:bg-zinc-800 rounded-lg border border-gray-300 dark:border-zinc-600 p-4 md:p-6 shadow-lg">
+            <h2 className="text-lg md:text-xl font-semibold mb-4 md:mb-6 text-gray-900 dark:text-white">🤖 AI配置</h2>
+            <AIConfigPanel />
+          </div>
+
+          {/* 应用设置卡片 */}
+          <div className="bg-white dark:bg-zinc-800 rounded-lg border border-gray-300 dark:border-zinc-600 p-4 md:p-6 shadow-lg">
             <h2 className="text-lg md:text-xl font-semibold mb-4 md:mb-6 text-gray-900 dark:text-white">应用设置</h2>
             
             {/* 主题设置 */}
@@ -155,7 +163,7 @@ const SettingView: FC = () => {
           </div>
         </div>
 
-        {/* 社交媒体和项目信息 */}
+        {/* 第二列：社交媒体和项目信息 */}
         <div className="flex flex-col h-auto md:h-[calc(100vh-8rem)] w-full">
           {/* 社交媒体账号卡片 */}
           <div className="bg-white dark:bg-zinc-800 rounded-lg border border-gray-300 dark:border-zinc-600 p-4 md:p-6 shadow-lg mb-4 md:mb-6 w-full">
@@ -220,7 +228,7 @@ const SettingView: FC = () => {
             <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <h3 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">使用提示</h3>
               <p className="text-xs text-blue-700 dark:text-blue-400">
-                欢迎使用躺平空间！这是一个现代化的个人空间应用，支持主题切换和背景定制。您可以在这里享受简洁优雅的数字生活体验。
+                欢迎使用AI游戏中心！请先在上方配置OpenAI API密钥，然后就可以开始体验AI驱动的狼人杀游戏了。AI会模拟不同性格的玩家，为您提供沉浸式的游戏体验。
               </p>
             </div>
           </div>

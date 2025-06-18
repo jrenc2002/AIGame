@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+1. 如果API密钥无效也不使用fallback模式，彻底！删除！fallback模式！
+2. 如果AI调用失败，会使用预设回复而不报错，会报错！彻底报错！
+3. 所有行为决策都用AI去决定，让AI去返回json决策数据！

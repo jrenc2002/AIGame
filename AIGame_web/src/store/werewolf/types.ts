@@ -41,8 +41,34 @@ export type NightActionType =
   | 'witch_poison'  // 女巫毒人
   | 'guard_protect' // 守卫保护
 
-// 玩家状态
-export type PlayerStatus = 'alive' | 'dead' | 'eliminated'
+// 玩家状态 - 修复状态枚举
+export type PlayerStatus = 'active' | 'eliminated' | 'inactive'
+
+// 游戏系统事件类型
+export type GameEventType = 
+  | 'phase_start'     // 阶段开始
+  | 'phase_end'       // 阶段结束
+  | 'player_death'    // 玩家死亡
+  | 'voting_result'   // 投票结果
+  | 'night_result'    // 夜晚行动结果
+  | 'game_start'      // 游戏开始
+  | 'game_end'        // 游戏结束
+  | 'skill_used'      // 技能使用
+  | 'system_action'   // 系统行为
+  | 'werewolf_kill'   // 狼人杀人
+  | 'witch_save'      // 女巫救人
+  | 'witch_poison'    // 女巫毒人
+  | 'peaceful_night'  // 平安夜
+
+// 发言情感类型
+export type SpeechEmotion = 
+  | 'neutral'      // 中性
+  | 'suspicious'   // 怀疑
+  | 'defensive'    // 防御
+  | 'aggressive'   // 激进
+  | 'confident'    // 自信
+  | 'nervous'      // 紧张
+  | 'calm'         // 冷静
 
 // 玩家数据接口
 export interface Player {
@@ -88,29 +114,52 @@ export interface Vote {
   timestamp: number
 }
 
-// 游戏日志接口
+// 游戏日志接口 - 仅记录系统事件
 export interface GameLog {
   id: string
   round: number
   phase: GamePhase
-  action: string
-  playerId?: string
-  targetId?: string
+  eventType: GameEventType
+  description: string // 事件描述
+  action?: string // 保持向后兼容性
+  playerId?: string // 相关玩家ID
+  targetId?: string // 目标玩家ID
   timestamp: number
   isPublic: boolean // 是否对所有玩家可见
   data?: any // 额外数据
 }
 
-// 游戏状态接口
+// 玩家发言记录接口 - 记录所有对话内容
+export interface PlayerSpeech {
+  id: string
+  playerId: string
+  playerName: string
+  content: string // 发言内容
+  emotion: SpeechEmotion
+  round: number
+  phase: GamePhase
+  timestamp: number
+  isAI: boolean
+  
+  // AI专用字段
+  reasoning?: string // AI推理过程（不参与context构建）
+  confidence?: number // AI置信度
+  
+  // 可见性控制
+  isVisible: boolean // 是否对其他玩家可见
+}
+
+// 游戏状态接口 - 扩展支持轮流发言
 export interface GameState {
   // 基础信息
   gameId: string
   currentRound: number
   currentPhase: GamePhase
+  isActive: boolean
   isGameActive: boolean
   isPaused?: boolean
   pauseReason?: string
-  winner?: CampType
+  winner?: string
   
   // 玩家信息
   players: Player[]
@@ -123,12 +172,20 @@ export interface GameState {
   votes: Vote[]
   votingDeadline?: number
   
-  // 游戏日志
+  // 游戏日志 - 仅系统事件
   gameLogs: GameLog[]
+  
+  // 玩家发言记录 - 单独管理
+  playerSpeeches: PlayerSpeech[]
   
   // 时间控制
   phaseStartTime: number
   phaseTimeLimit: number
+  
+  // 轮流发言状态
+  currentSpeakerIndex?: number
+  speakingOrder?: string[]
+  discussionComplete?: boolean
   
   // 游戏设置
   settings: GameSettings
@@ -152,7 +209,6 @@ export interface GameSettings {
 
 // AI决策结果接口
 export interface AIDecision {
-  playerId: string
   actionType: 'vote' | 'skill' | 'discussion'
   target?: string
   reasoning: string

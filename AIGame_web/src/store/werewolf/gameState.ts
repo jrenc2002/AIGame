@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import { GameState, Player, GameSettings, GamePhase, RoleType, CampType, GameLog, Vote, NightAction } from './types'
+import { GameState, Player, GameSettings, GamePhase, RoleType, CampType, GameLog, PlayerSpeech, Vote, NightAction } from './types'
 
 // 默认游戏设置
 const defaultGameSettings: GameSettings = {
@@ -35,6 +35,7 @@ export const initialGameState: GameState = {
   nightActions: [],
   votes: [],
   gameLogs: [],
+  playerSpeeches: [],
   phaseStartTime: 0,
   phaseTimeLimit: 0,
   settings: defaultGameSettings
@@ -43,8 +44,44 @@ export const initialGameState: GameState = {
 // 主要游戏状态原子
 export const gameStateAtom = atom<GameState>(initialGameState)
 
-// 游戏日志原子
-export const gameLogsAtom = atom<GameLog[]>([])
+// 游戏日志原子 - 仅系统事件
+export const gameLogsAtom = atom<GameLog[]>(
+  (get) => get(gameStateAtom).gameLogs,
+  (get, set, newLogs: GameLog[]) => {
+    const currentState = get(gameStateAtom)
+    set(gameStateAtom, { ...currentState, gameLogs: newLogs })
+  }
+)
+
+// 玩家发言记录原子
+export const playerSpeechesAtom = atom<PlayerSpeech[]>(
+  (get) => get(gameStateAtom).playerSpeeches,
+  (get, set, newSpeeches: PlayerSpeech[]) => {
+    const currentState = get(gameStateAtom)
+    set(gameStateAtom, { ...currentState, playerSpeeches: newSpeeches })
+  }
+)
+
+// 当前回合发言记录原子
+export const currentRoundSpeechesAtom = atom<PlayerSpeech[]>((get) => {
+  const gameState = get(gameStateAtom)
+  const speeches = get(playerSpeechesAtom)
+  return speeches.filter(speech => 
+    speech.round === gameState.currentRound && speech.isVisible
+  )
+})
+
+// 讨论阶段发言记录原子
+export const discussionSpeechesAtom = atom<PlayerSpeech[]>((get) => {
+  const speeches = get(currentRoundSpeechesAtom)
+  return speeches.filter(speech => speech.phase === 'day_discussion')
+})
+
+// 所有历史发言记录原子（用于统一聊天面板）
+export const allPlayerSpeechesAtom = atom<PlayerSpeech[]>((get) => {
+  const speeches = get(playerSpeechesAtom)
+  return speeches.filter(speech => speech.isVisible)
+})
 
 // 当前玩家原子（真人玩家）
 export const currentPlayerAtom = atom<Player | null>(null)
@@ -68,7 +105,7 @@ export const currentPhaseAtom = atom<GamePhase>(
 // 活跃玩家原子（存活的玩家）
 export const alivePlayersAtom = atom<Player[]>((get) => {
   const gameState = get(gameStateAtom)
-  return gameState.players.filter(player => player.status === 'alive')
+  return gameState.players.filter(player => player.status === 'active')
 })
 
 // 狼人玩家原子
@@ -132,10 +169,10 @@ export const gameWinnerAtom = atom<CampType | null>((get) => {
   return null // 游戏继续
 })
 
-// 游戏日志原子（仅显示公开日志）
+// 公开游戏日志原子（仅显示公开的系统事件）
 export const publicGameLogsAtom = atom<GameLog[]>((get) => {
-  const gameState = get(gameStateAtom)
-  return gameState.gameLogs.filter(log => log.isPublic)
+  const logs = get(gameLogsAtom)
+  return logs.filter(log => log.isPublic)
 })
 
 // 时间触发器原子 - 每秒更新一次

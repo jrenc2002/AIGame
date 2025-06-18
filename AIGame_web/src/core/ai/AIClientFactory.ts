@@ -1,5 +1,6 @@
 import { AIClient, AIClientConfig, RetryableAIClient } from './AIClient'
 import { OpenAIClient } from './OpenAIClient'
+import { getAPIConfig, getValidAPIKey } from '@/lib/apiConfig'
 
 // 支持的AI提供商
 export type AIProvider = 'openai' | 'qianfan' | 'local'
@@ -56,7 +57,7 @@ export class AIClientFactory {
     switch (provider) {
       case 'openai':
         return {
-          model: 'gpt-3.5-turbo',
+          model: 'deepseek-r1',
           temperature: 0.7,
           topP: 1.0,
           maxTokens: 2000,
@@ -86,7 +87,72 @@ export class AIClientFactory {
     }
   }
   
-  // 从环境变量创建客户端
+  // 从API配置创建客户端（支持localStorage配置）
+  static createFromConfig(provider: AIProvider = 'openai'): AIClient {
+    const apiConfig = getAPIConfig()
+    const defaultConfig = this.getDefaultConfig(provider)
+    
+    let config: AIClientConfig
+    let hasValidCredentials = false
+    
+    switch (provider) {
+      case 'openai': {
+        const openaiApiKey = getValidAPIKey('openai')
+        hasValidCredentials = !!openaiApiKey
+        
+        config = {
+          ...defaultConfig,
+          apiKey: openaiApiKey || apiConfig.openaiApiKey,
+          baseURL: apiConfig.openaiBaseUrl || 'https://api.openai-next.com/v1',
+          model: apiConfig.openaiModel || defaultConfig.model!,
+          maxTokens: apiConfig.maxTokens || defaultConfig.maxTokens,
+          temperature: apiConfig.temperature || defaultConfig.temperature
+        }
+        break
+      }
+        
+      case 'qianfan': {
+        const qianfanApiKey = getValidAPIKey('qianfan')
+        hasValidCredentials = !!qianfanApiKey && !!apiConfig.qianfanSecretKey
+        
+        config = {
+          ...defaultConfig,
+          apiKey: qianfanApiKey || apiConfig.qianfanApiKey,
+          secretKey: apiConfig.qianfanSecretKey,
+          model: defaultConfig.model!
+        }
+        break
+      }
+        
+      case 'local':
+        // 本地模型不需要API密钥检查
+        hasValidCredentials = true
+        config = {
+          ...defaultConfig,
+          baseURL: apiConfig.localApiUrl || 'http://localhost:8000',
+          model: defaultConfig.model!
+        }
+        break
+        
+      default:
+        throw new Error(`Unsupported provider: ${provider}`)
+    }
+    
+    // 如果没有有效的API密钥，直接抛出错误
+    if (!hasValidCredentials) {
+      throw new Error(`❌ 没有找到 ${provider} 的有效API密钥！请检查API配置：
+        - openai: 需要有效的OpenAI API Key
+        - qianfan: 需要有效的千帆API Key和Secret Key`)
+    }
+    
+    return this.createClient({
+      provider,
+      config,
+      enableRetry: true
+    })
+  }
+  
+  // 从环境变量创建客户端（保持原有功能，但添加回退到apiConfig）
   static createFromEnv(provider: AIProvider = 'openai'): AIClient {
     const defaultConfig = this.getDefaultConfig(provider)
     
@@ -135,11 +201,10 @@ export class AIClientFactory {
         throw new Error(`Unsupported provider: ${provider}`)
     }
     
-    // 如果没有有效的API密钥，直接抛出错误
+    // 如果环境变量没有有效的API密钥，尝试从apiConfig读取
     if (!hasValidCredentials) {
-      throw new Error(`❌ 没有找到 ${provider} 的有效API密钥！请检查环境变量配置：
-        - openai: VITE_OPENAI_API_KEY 和 VITE_OPENAI_BASE_URL
-        - qianfan: VITE_QIANFAN_AK 和 VITE_QIANFAN_SK`)
+      console.warn(`⚠️ 环境变量中没有找到 ${provider} 的有效API密钥，尝试从本地配置读取...`)
+      return this.createFromConfig(provider)
     }
     
     return this.createClient({
@@ -182,12 +247,12 @@ export class AIClientFactory {
   }
 }
 
-// 便捷函数：获取默认AI客户端
+// 便捷函数：获取默认AI客户端（优先使用配置）
 export function getDefaultAIClient(): AIClient {
-  return AIClientFactory.createFromEnv()
+  return AIClientFactory.createFromConfig()
 }
 
-// 便捷函数：获取指定提供商的客户端
+// 便捷函数：获取指定提供商的客户端（优先使用配置）
 export function getAIClient(provider: AIProvider): AIClient {
-  return AIClientFactory.createFromEnv(provider)
+  return AIClientFactory.createFromConfig(provider)
 } 

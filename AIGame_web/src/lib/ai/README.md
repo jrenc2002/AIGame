@@ -105,8 +105,8 @@ console.log('决策信心:', decision.confidence)
 ```bash
 # .env.local
 VITE_OPENAI_API_KEY=sk-your-openai-api-key
-VITE_OPENAI_MODEL=gpt-3.5-turbo
-VITE_OPENAI_BASE_URL=https://api.openai.com/v1
+VITE_OPENAI_MODEL=deepseek-r1
+VITE_OPENAI_BASE_URL=https://api.openai-next.com/v1
 VITE_AI_MAX_TOKENS=800
 VITE_AI_TEMPERATURE=0.8
 ```

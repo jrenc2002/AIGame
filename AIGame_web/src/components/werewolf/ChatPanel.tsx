@@ -1,7 +1,7 @@
 import { type FC, useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Player, GamePhase } from '@/store/werewolf/types'
-import { AISpeechResult } from '@/lib/aiService'
+import { WerewolfAISpeech } from '@/lib/ai/WerewolfAIService'
 
 // 聊天消息接口
 export interface ChatMessage {
@@ -9,10 +9,10 @@ export interface ChatMessage {
   playerId: string
   playerName: string
   message: string
-  emotion: AISpeechResult['emotion']
-  confidence: number
   timestamp: number
-  isAI: boolean
+  emotion: 'neutral' | 'excited' | 'angry' | 'suspicious' | 'confident'
+  confidence?: number
+  isAI?: boolean
 }
 
 interface ChatPanelProps {
@@ -53,7 +53,7 @@ export const ChatPanel: FC<ChatPanelProps> = ({
   }
 
   // 获取情感对应的样式
-  const getEmotionStyle = (emotion: AISpeechResult['emotion']) => {
+  const getEmotionStyle = (emotion: WerewolfAISpeech['emotion']) => {
     switch (emotion) {
       case 'suspicious':
         return 'bg-yellow-100 border-yellow-300 text-yellow-800'
@@ -69,7 +69,7 @@ export const ChatPanel: FC<ChatPanelProps> = ({
   }
 
   // 获取情感对应的图标
-  const getEmotionIcon = (emotion: AISpeechResult['emotion']) => {
+  const getEmotionIcon = (emotion: WerewolfAISpeech['emotion']) => {
     switch (emotion) {
       case 'suspicious':
         return '🤔'

@@ -6,28 +6,37 @@ import { ROLE_CONFIGS } from '@/store/werewolf/gameState'
 interface PlayerCardProps {
   player: Player
   isCurrentPlayer?: boolean
+  isCurrentSpeaker?: boolean
   canVote?: boolean
   hasVoted?: boolean
   votesReceived?: number
   onVote?: (playerId: string) => void
   showRole?: boolean
+  compact?: boolean
   className?: string
 }
 
 export const PlayerCard: FC<PlayerCardProps> = ({
   player,
   isCurrentPlayer = false,
+  isCurrentSpeaker = false,
   canVote = false,
   hasVoted = false,
   votesReceived = 0,
   onVote,
   showRole = false,
+  compact = false,
   className = ''
 }) => {
   const roleConfig = ROLE_CONFIGS[player.role]
-  const isAlive = player.status === 'alive'
+  const isAlive = player.status === 'active'
   const isEliminated = player.status === 'eliminated'
   const isDead = player.status === 'dead'
+  const isHighlighted = isCurrentSpeaker
+  
+  // 根据compact模式确定卡片大小
+  const cardSize = compact ? 'w-16 h-20' : 'w-20 h-24'
+  const textSize = compact ? 'text-xs' : 'text-sm'
 
   const handleVoteClick = () => {
     if (canVote && onVote && !hasVoted && isAlive && !isCurrentPlayer) {
@@ -37,6 +46,9 @@ export const PlayerCard: FC<PlayerCardProps> = ({
 
   // 卡片状态样式
   const getCardStyle = () => {
+    if (isCurrentSpeaker) {
+      return 'ring-2 ring-green-400 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20'
+    }
     if (isCurrentPlayer) {
       return 'ring-2 ring-cyan-400 bg-gradient-to-br from-cyan-50 to-blue-100 dark:from-cyan-900/20 dark:to-blue-800/20'
     }
@@ -92,6 +104,13 @@ export const PlayerCard: FC<PlayerCardProps> = ({
       {isCurrentPlayer && (
         <div className="absolute top-2 left-2 bg-cyan-400 text-white text-xs px-2 py-1 rounded-full font-medium">
           你
+        </div>
+      )}
+
+      {/* 发言者标识 */}
+      {isCurrentSpeaker && (
+        <div className="absolute top-2 right-2 bg-green-400 text-white text-xs px-2 py-1 rounded-full font-medium animate-pulse">
+          发言中
         </div>
       )}
 
