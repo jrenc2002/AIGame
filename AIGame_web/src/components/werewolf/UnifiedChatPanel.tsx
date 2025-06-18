@@ -200,338 +200,282 @@ export const UnifiedChatPanel: FC<UnifiedChatPanelProps> = ({
 
   // 渲染发言消息
   const renderSpeechMessage = (message: UnifiedMessage) => (
-    <motion.div
-      key={message.id}
-      layout
-      initial={{ opacity: 0, y: 20, scale: 0.9 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.3 }}
-      className="rounded-lg bg-gray-800 p-4 text-sm ml-2 mr-2"
-    >
-      {/* 玩家信息头部 */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center space-x-2">
-          <span className="text-lg">👤</span>
-          <span className="font-medium text-white">{message.playerName}</span>
-          {message.isAI && (
-            <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded dark:bg-purple-900 dark:text-purple-200">
-              AI
-            </span>
-          )}
-          {/* 显示回合和阶段信息 */}
-          <span className="text-xs text-blue-400">
-            第{message.round}回合 · {getPhaseDisplayName(message.phase!)}
-          </span>
-          <span className="text-xs text-gray-500">
-            {new Date(message.timestamp).toLocaleTimeString()}
-          </span>
-        </div>
-        
-        {/* AI推理按钮 */}
-        {message.isAI && message.reasoning && (
-          <button
-            onClick={() => toggleReasoning(message.id)}
-            className="text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 px-2 py-1 rounded transition-colors"
-          >
-            {expandedReasonings.has(message.id) ? '隐藏推理' : '查看推理'}
-          </button>
-        )}
-      </div>
-
-      {/* 发言内容 */}
-      <div className={`
-        inline-block px-3 py-2 rounded-lg border text-sm max-w-full
-        ${getEmotionStyle(message.emotion!)}
-      `}>
-        <div className="flex items-start space-x-2">
-          <span className="text-lg flex-shrink-0">{getEmotionIcon(message.emotion!)}</span>
-          <div className="flex-1">
-            <p className="break-words">{message.content}</p>
-            
-            {/* AI置信度指示器 */}
-            {message.isAI && message.confidence && (
-              <div className="mt-1 text-xs opacity-70">
-                置信度: {Math.round(message.confidence * 100)}%
+    <div className="group">
+      <div className="backdrop-blur-md bg-white/5 border border-white/10 rounded-2xl p-4 
+                      hover:bg-white/8 transition-all duration-300 hover:border-white/20">
+        {/* 玩家信息头部 */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full 
+                           flex items-center justify-center text-sm shadow-lg">
+              👤
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="font-medium text-white text-sm">{message.playerName}</span>
+                {message.isAI && (
+                  <span className="text-xs bg-gradient-to-r from-purple-500/20 to-purple-600/20 
+                                 text-purple-300 px-2 py-1 rounded-full border border-purple-500/30
+                                 backdrop-blur-sm">
+                    AI
+                  </span>
+                )}
               </div>
-            )}
+              <div className="flex items-center space-x-2 text-xs text-gray-400 mt-1">
+                <span>第{message.round}回合</span>
+                <span>•</span>
+                <span>{getPhaseDisplayName(message.phase!)}</span>
+                <span>•</span>
+                <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+              </div>
+            </div>
+          </div>
+          
+          {/* AI推理按钮 */}
+          {message.isAI && message.reasoning && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => toggleReasoning(message.id)}
+              className="text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 
+                       px-3 py-1.5 rounded-lg transition-all duration-200 border border-purple-500/30
+                       backdrop-blur-sm min-h-[32px] touch-manipulation"
+            >
+              {expandedReasonings.has(message.id) ? '隐藏推理' : '🧠 推理'}
+            </motion.button>
+          )}
+        </div>
+
+        {/* 发言内容 */}
+        <div className={`
+          p-4 rounded-xl border backdrop-blur-sm text-sm lg:text-base
+          ${getEmotionStyle(message.emotion!)}
+        `}>
+          <div className="flex items-start space-x-3">
+            <span className="text-xl flex-shrink-0 mt-1">{getEmotionIcon(message.emotion!)}</span>
+            <div className="flex-1 min-w-0">
+              <p className="break-words leading-relaxed">{message.content}</p>
+              
+              {/* AI置信度指示器 */}
+              {message.isAI && message.confidence && (
+                <div className="mt-2 flex items-center space-x-2">
+                  <div className="flex-1 bg-black/20 rounded-full h-1.5">
+                    <div 
+                      className="h-full bg-gradient-to-r from-purple-400 to-purple-600 rounded-full
+                               transition-all duration-500"
+                      style={{ width: `${message.confidence * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {Math.round(message.confidence * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* AI推理过程 */}
-      <AnimatePresence>
-        {message.isAI && message.reasoning && expandedReasonings.has(message.id) && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="mt-3 p-3 bg-gray-700 rounded-lg border-l-4 border-purple-500"
-          >
-            <div className="flex items-center space-x-2 mb-2">
-              <span className="text-sm">🧠</span>
-              <span className="text-sm font-medium text-purple-300">AI推理过程</span>
-            </div>
-            <p className="text-xs text-gray-300 leading-relaxed">
-              {message.reasoning}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+        {/* AI推理过程 */}
+        <AnimatePresence>
+          {message.isAI && message.reasoning && expandedReasonings.has(message.id) && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="mt-4 p-4 bg-gradient-to-r from-purple-900/20 to-indigo-900/20 
+                       rounded-xl border border-purple-500/30 backdrop-blur-sm"
+            >
+              <div className="flex items-center space-x-2 mb-3">
+                <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg 
+                               flex items-center justify-center text-sm">
+                  🧠
+                </div>
+                <span className="text-sm font-medium text-purple-300">AI推理过程</span>
+              </div>
+              <p className="text-xs lg:text-sm text-gray-300 leading-relaxed">
+                {message.reasoning}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
   )
 
   // 渲染系统日志消息
   const renderSystemLogMessage = (message: UnifiedMessage) => (
-    <motion.div
-      key={message.id}
-      layout
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
-      className="rounded-lg bg-gray-900 border border-gray-700 p-3 text-sm mx-8 my-1"
-    >
-      <div className="flex items-center space-x-3">
-        <span className="text-lg">{getEventIcon(message.eventType!)}</span>
-        <div className="flex-1">
-          <div className="flex items-center space-x-2 mb-1">
-            <span className="text-xs text-gray-500">
-              第{message.round}回合 · {message.phase}
-            </span>
-            <span className="text-xs text-gray-500">
-              {new Date(message.timestamp).toLocaleTimeString()}
-            </span>
+    <div className="flex justify-center">
+      <div className="max-w-md mx-4">
+        <div className="backdrop-blur-sm bg-black/20 border border-white/20 rounded-xl p-3 
+                        text-center hover:bg-black/30 transition-all duration-300">
+          <div className="flex items-center justify-center space-x-3">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg shadow-lg
+                           ${message.eventType === 'player_death' ? 'bg-gradient-to-br from-red-500 to-red-600' :
+                             message.eventType === 'phase_start' ? 'bg-gradient-to-br from-blue-500 to-blue-600' :
+                             message.eventType === 'voting_result' ? 'bg-gradient-to-br from-orange-500 to-orange-600' :
+                             message.eventType === 'night_result' ? 'bg-gradient-to-br from-purple-500 to-purple-600' :
+                             message.eventType === 'game_start' ? 'bg-gradient-to-br from-green-500 to-green-600' :
+                             message.eventType === 'game_end' ? 'bg-gradient-to-br from-gray-500 to-gray-600' :
+                             'bg-gradient-to-br from-gray-400 to-gray-500'}`}>
+              {getEventIcon(message.eventType!)}
+            </div>
+            
+            <div className="flex-1 text-left">
+              <p className={`${getEventColor(message.eventType!)} font-medium text-sm leading-relaxed`}>
+                {message.description}
+              </p>
+              <div className="flex items-center justify-center space-x-2 text-xs text-gray-500 mt-1">
+                <span>第{message.round}回合</span>
+                <span>•</span>
+                <span>{message.phase}</span>
+                <span>•</span>
+                <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+              </div>
+            </div>
           </div>
-          <p className={`${getEventColor(message.eventType!)} font-medium text-xs`}>
-            {message.description}
-          </p>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 当前发言者指示器 */}
-      {gameState.currentPhase === 'day_discussion' && (
-        <div className="p-4 border-b border-gray-600 bg-gray-700">
-          {!discussionComplete ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <motion.div
-                  className="w-3 h-3 bg-green-400 rounded-full"
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ repeat: Infinity, duration: 2 }}
-                />
-                <div>
-                  <div className="text-sm text-gray-300">当前发言者</div>
-                  <div className="font-semibold text-white">
-                    {currentSpeaker ? currentSpeaker.name : '等待中...'}
-                    {currentSpeaker && !currentSpeaker.isPlayer && (
-                      <span className="ml-2 text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded dark:bg-purple-900 dark:text-purple-200">
-                        AI
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* 发言顺序指示器和自动滚动控制 */}
-              <div className="flex items-center space-x-3">
-                <div className="text-xs text-gray-400">
-                  {currentSpeakerIndex + 1} / {speakingOrder.length}
-                </div>
-                
-                {/* 自动滚动控制按钮 */}
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setAutoScroll(!autoScroll)}
-                    className={`text-xs px-2 py-1 rounded transition-colors ${
-                      autoScroll 
-                        ? 'bg-green-600 text-white hover:bg-green-700' 
-                        : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                    }`}
-                    title={autoScroll ? '关闭自动滚动' : '开启自动滚动'}
-                  >
-                    {autoScroll ? '📍自动' : '📍手动'}
-                  </button>
-                  
-                  {!autoScroll && (
-                    <button
-                      onClick={scrollToBottom}
-                      className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                      title="滚动到底部"
-                    >
-                      ⬇️
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <div className="text-center text-gray-300 flex-1">
-                <div className="text-sm">讨论已结束</div>
-                <div className="text-xs text-gray-400 mt-1">等待进入投票阶段</div>
-              </div>
-              
-              {/* 在讨论结束状态也显示滚动控制 */}
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setAutoScroll(!autoScroll)}
-                  className={`text-xs px-2 py-1 rounded transition-colors ${
-                    autoScroll 
-                      ? 'bg-green-600 text-white hover:bg-green-700' 
-                      : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                  }`}
-                  title={autoScroll ? '关闭自动滚动' : '开启自动滚动'}
-                >
-                  {autoScroll ? '📍自动' : '📍手动'}
-                </button>
-                
-                {!autoScroll && (
-                  <button
-                    onClick={scrollToBottom}
-                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    title="滚动到底部"
-                  >
-                    ⬇️
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 其他阶段也添加滚动控制 */}
-      {gameState.currentPhase !== 'day_discussion' && (
-        <div className="p-2 border-b border-gray-600 bg-gray-700 flex justify-end">
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setAutoScroll(!autoScroll)}
-              className={`text-xs px-2 py-1 rounded transition-colors ${
-                autoScroll 
-                  ? 'bg-green-600 text-white hover:bg-green-700' 
-                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-              }`}
-              title={autoScroll ? '关闭自动滚动' : '开启自动滚动'}
-            >
-              {autoScroll ? '📍自动' : '📍手动'}
-            </button>
-            
-            {!autoScroll && (
-              <button
-                onClick={scrollToBottom}
-                className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                title="滚动到底部"
-              >
-                ⬇️
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 统一的消息区域 */}
+    <div className="flex flex-col h-full bg-transparent">
+      {/* 消息列表容器 */}
       <div 
-        className="flex-1 overflow-y-auto p-2" 
         ref={messagesContainerRef}
         onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-3 lg:p-4 space-y-3 scrollbar-thin scrollbar-thumb-white/20 
+                   scrollbar-track-transparent hover:scrollbar-thumb-white/30"
+        style={{ maxHeight: 'calc(100vh - 300px)' }}
       >
-        <div className="space-y-1">
-          <AnimatePresence>
-            {unifiedMessages.map((message) => 
-              message.type === 'speech' 
-                ? renderSpeechMessage(message)
-                : renderSystemLogMessage(message)
-            )}
-          </AnimatePresence>
-          
-          {unifiedMessages.length === 0 && (
-            <div className="text-center text-gray-500 py-8">
-              <p>游戏即将开始</p>
-              <p className="text-xs mt-1">系统日志和玩家发言将在这里显示</p>
-            </div>
-          )}
-        </div>
+        <AnimatePresence initial={false}>
+          {unifiedMessages.map((message) => (
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              {message.type === 'speech' ? renderSpeechMessage(message) : renderSystemLogMessage(message)}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        
+        {/* 自动滚动指示器 */}
+        {!autoScroll && unifiedMessages.length > 0 && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={scrollToBottom}
+            className="fixed bottom-32 right-6 lg:bottom-6 lg:right-6 z-30 
+                       bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700
+                       text-white p-3 rounded-full shadow-lg shadow-blue-500/25 backdrop-blur-sm
+                       transition-all duration-200 min-h-[48px] min-w-[48px] lg:min-h-[40px] lg:min-w-[40px]
+                       flex items-center justify-center touch-manipulation"
+            title="滚动到底部"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          </motion.button>
+        )}
+        
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 用户发言区域 */}
-      {isMyTurn && !discussionComplete && gameState.currentPhase === 'day_discussion' && (
+      {/* 操作区域 */}
+      {isMyTurn && gameState.currentPhase === 'day_discussion' && currentPlayer && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4 border-t border-gray-600 bg-gray-700"
+          className="p-3 lg:p-4 border-t border-white/10 bg-gradient-to-r from-black/10 to-black/20 backdrop-blur-sm"
         >
           <div className="space-y-3">
-            <div className="text-sm font-medium text-green-400 flex items-center space-x-2">
+            {/* 发言状态提示 */}
+            <div className="flex items-center space-x-2 text-sm">
               <motion.div
-                className="w-2 h-2 bg-green-400 rounded-full"
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ repeat: Infinity, duration: 1 }}
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="w-3 h-3 bg-emerald-400 rounded-full shadow-lg shadow-emerald-400/50"
               />
-              <span>轮到你发言了！</span>
+              <span className="text-emerald-400 font-medium">轮到你发言了</span>
+              <span className="text-gray-400">•</span>
+              <span className="text-gray-400">仔细思考后表达观点</span>
             </div>
             
-            <div className="flex space-x-2">
-              <input
-                type="text"
+            {/* 发言输入框 */}
+            <div className="space-y-3">
+              <textarea
                 value={speechInput}
                 onChange={(e) => setSpeechInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSubmitSpeech()}
-                placeholder="输入你的发言内容..."
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
-                maxLength={200}
+                placeholder="分享你的观察和推理..."
+                className="w-full p-4 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-400
+                         focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400/50
+                         backdrop-blur-sm resize-none transition-all duration-200 min-h-[100px]
+                         text-sm lg:text-base"
+                maxLength={500}
               />
-              <button
-                onClick={handleSubmitSpeech}
-                disabled={!speechInput.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
-              >
-                发言
-              </button>
-            </div>
-            
-            <div className="flex space-x-2">
-              <button
-                onClick={onSkip}
-                className="px-3 py-1 bg-gray-600 hover:bg-gray-500 rounded text-xs transition-colors"
-              >
-                跳过发言
-              </button>
-              <button
-                onClick={onEndDiscussion}
-                className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-xs transition-colors"
-              >
-                结束讨论
-              </button>
+              
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-gray-400">
+                  {speechInput.length}/500 字符
+                </div>
+                
+                {/* 操作按钮 */}
+                <div className="flex space-x-2">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={onSkip}
+                    className="px-4 py-2 bg-gray-600/50 hover:bg-gray-600/70 text-gray-300 
+                             rounded-lg transition-all duration-200 text-sm min-h-[40px] touch-manipulation
+                             backdrop-blur-sm border border-white/10"
+                  >
+                    跳过发言
+                  </motion.button>
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleSubmitSpeech}
+                    disabled={!speechInput.trim()}
+                    className="px-6 py-2 bg-gradient-to-r from-emerald-500 to-green-600 
+                             hover:from-emerald-600 hover:to-green-700 disabled:from-gray-600 
+                             disabled:to-gray-700 text-white rounded-lg transition-all duration-200 
+                             text-sm font-medium min-h-[40px] touch-manipulation
+                             shadow-lg shadow-emerald-500/25 disabled:shadow-none
+                             backdrop-blur-sm border border-white/20 disabled:border-gray-600/50"
+                  >
+                    发表观点
+                  </motion.button>
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>
       )}
 
-      {/* 等待发言的提示 */}
-      {!isMyTurn && !discussionComplete && currentSpeaker && gameState.currentPhase === 'day_discussion' && (
-        <div className="p-4 border-t border-gray-600 bg-gray-700">
-          <div className="text-center text-gray-400 text-sm">
-            {currentSpeaker.isPlayer ? (
-              <span>等待 {currentSpeaker.name} 发言...</span>
-            ) : (
-              <div className="flex items-center justify-center space-x-2">
-                <motion.div
-                  className="w-2 h-2 bg-purple-400 rounded-full"
-                  animate={{ opacity: [1, 0.3, 1] }}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                />
-                <span>{currentSpeaker.name} 正在思考中...</span>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* 讨论结束控制 */}
+      {gameState.currentPhase === 'day_discussion' && !discussionComplete && currentPlayer && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="p-3 lg:p-4 border-t border-white/10 bg-black/10 backdrop-blur-sm"
+        >
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onEndDiscussion}
+            className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 
+                     hover:to-red-700 text-white rounded-xl transition-all duration-200
+                     font-medium shadow-lg shadow-orange-500/25 backdrop-blur-sm
+                     border border-white/20 min-h-[48px] touch-manipulation"
+          >
+            结束讨论，进入投票
+          </motion.button>
+        </motion.div>
       )}
     </div>
   )

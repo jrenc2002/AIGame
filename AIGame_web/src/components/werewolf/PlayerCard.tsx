@@ -31,12 +31,6 @@ export const PlayerCard: FC<PlayerCardProps> = ({
   const roleConfig = ROLE_CONFIGS[player.role]
   const isAlive = player.status === 'active'
   const isEliminated = player.status === 'eliminated'
-  const isDead = player.status === 'dead'
-  const isHighlighted = isCurrentSpeaker
-  
-  // 根据compact模式确定卡片大小
-  const cardSize = compact ? 'w-16 h-20' : 'w-20 h-24'
-  const textSize = compact ? 'text-xs' : 'text-sm'
 
   const handleVoteClick = () => {
     if (canVote && onVote && !hasVoted && isAlive && !isCurrentPlayer) {
@@ -44,57 +38,81 @@ export const PlayerCard: FC<PlayerCardProps> = ({
     }
   }
 
-  // 卡片状态样式
+  // 现代化卡片样式
   const getCardStyle = () => {
+    const baseStyle = `
+      backdrop-blur-xl bg-white/10 dark:bg-black/10 border border-white/20 dark:border-white/10
+      shadow-xl shadow-black/5 dark:shadow-black/20
+    `
+    
     if (isCurrentSpeaker) {
-      return 'ring-2 ring-green-400 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-800/20'
+      return `${baseStyle} ring-2 ring-emerald-400/60 bg-emerald-50/20 dark:bg-emerald-900/20 
+              shadow-emerald-500/20 dark:shadow-emerald-400/10`
     }
     if (isCurrentPlayer) {
-      return 'ring-2 ring-cyan-400 bg-gradient-to-br from-cyan-50 to-blue-100 dark:from-cyan-900/20 dark:to-blue-800/20'
+      return `${baseStyle} ring-2 ring-cyan-400/60 bg-cyan-50/20 dark:bg-cyan-900/20
+              shadow-cyan-500/20 dark:shadow-cyan-400/10`
     }
-    if (isDead || isEliminated) {
-      return 'bg-gray-100 dark:bg-gray-800 opacity-60'
+    if (isEliminated) {
+      return `${baseStyle} opacity-40 grayscale saturate-50`
     }
     if (canVote && !hasVoted && !isCurrentPlayer) {
-      return 'hover:ring-2 hover:ring-orange-300 cursor-pointer bg-white dark:bg-zinc-800 hover:bg-orange-50 dark:hover:bg-orange-900/10'
+      return `${baseStyle} hover:ring-2 hover:ring-orange-300/60 cursor-pointer 
+              hover:bg-orange-50/10 dark:hover:bg-orange-900/10 hover:shadow-orange-500/20
+              transition-all duration-300 ease-out`
     }
-    return 'bg-white dark:bg-zinc-800'
+    return baseStyle
   }
 
   // 状态指示器
   const getStatusIndicator = () => {
-    if (isDead) return { icon: '💀', color: 'text-red-500', label: '死亡' }
-    if (isEliminated) return { icon: '❌', color: 'text-gray-500', label: '出局' }
-    if (player.isProtected) return { icon: '🛡️', color: 'text-cyan-500', label: '被保护' }
-    if (player.isPoisoned) return { icon: '☠️', color: 'text-purple-500', label: '中毒' }
-    return { icon: '✅', color: 'text-green-500', label: '存活' }
+    if (isEliminated) return { icon: '❌', color: 'text-gray-400', label: '出局' }
+    if (player.isProtected) return { icon: '🛡️', color: 'text-cyan-400', label: '被保护' }
+    if (player.isPoisoned) return { icon: '☠️', color: 'text-purple-400', label: '中毒' }
+    return { icon: '✅', color: 'text-emerald-400', label: '存活' }
   }
 
   const statusIndicator = getStatusIndicator()
 
   return (
     <motion.div
-      whileHover={canVote && !hasVoted && !isCurrentPlayer && isAlive ? { scale: 1.02, y: -2 } : {}}
-      whileTap={canVote && !hasVoted && !isCurrentPlayer && isAlive ? { scale: 0.98 } : {}}
+      whileHover={canVote && !hasVoted && !isCurrentPlayer && isAlive ? { 
+        scale: 1.02, 
+        y: -2,
+        transition: { duration: 0.2, ease: "easeOut" }
+      } : {}}
+      whileTap={canVote && !hasVoted && !isCurrentPlayer && isAlive ? { 
+        scale: 0.98,
+        transition: { duration: 0.1 }
+      } : {}}
       onClick={handleVoteClick}
       className={`
         ${getCardStyle()}
-        rounded-lg border border-gray-300 dark:border-zinc-600 p-4 shadow-lg
-        transition-all duration-300 relative overflow-hidden
+        rounded-2xl p-3 relative overflow-hidden
+        ${compact ? 'w-32 h-32' : 'w-40 h-40'}
+        flex flex-col
+        transition-all duration-300 ease-out
         ${className}
       `}
     >
-      {/* 背景装饰 */}
+      {/* 背景装饰光晕 */}
       {isCurrentPlayer && (
-        <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-bl-full opacity-10" />
+        <div className="absolute -inset-1 bg-gradient-to-br from-cyan-400/20 to-blue-500/20 
+                        rounded-2xl blur-lg -z-10 animate-pulse" />
+      )}
+      {isCurrentSpeaker && (
+        <div className="absolute -inset-1 bg-gradient-to-br from-emerald-400/20 to-green-500/20 
+                        rounded-2xl blur-lg -z-10 animate-pulse" />
       )}
 
       {/* 投票数指示器 */}
       {votesReceived > 0 && (
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center z-10"
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          className="absolute -top-2 -right-2 bg-gradient-to-br from-red-500 to-red-600 
+                     text-white text-xs font-bold rounded-full w-6 h-6 flex items-center 
+                     justify-center z-10 shadow-lg border-2 border-white/20"
         >
           {votesReceived}
         </motion.div>
@@ -102,65 +120,84 @@ export const PlayerCard: FC<PlayerCardProps> = ({
 
       {/* 当前玩家标识 */}
       {isCurrentPlayer && (
-        <div className="absolute top-2 left-2 bg-cyan-400 text-white text-xs px-2 py-1 rounded-full font-medium">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="absolute top-2 left-2 bg-gradient-to-r from-cyan-500 to-blue-500 
+                     text-white text-xs px-2 py-1 rounded-full font-medium 
+                     shadow-lg backdrop-blur-sm"
+        >
           你
-        </div>
+        </motion.div>
       )}
 
       {/* 发言者标识 */}
       {isCurrentSpeaker && (
-        <div className="absolute top-2 right-2 bg-green-400 text-white text-xs px-2 py-1 rounded-full font-medium animate-pulse">
-          发言中
-        </div>
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="absolute top-2 right-2 bg-gradient-to-r from-emerald-500 to-green-500 
+                     text-white text-xs px-2 py-1 rounded-full font-medium 
+                     shadow-lg backdrop-blur-sm"
+        >
+          <motion.span
+            animate={{ opacity: [1, 0.5, 1] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+          >
+            发言
+          </motion.span>
+        </motion.div>
       )}
 
       {/* 玩家头像区域 */}
-      <div className="flex items-center space-x-3 mb-3">
+      <div className="flex flex-col items-center flex-1 justify-center space-y-2">
         <div className="relative">
-          <div className={`
-            w-12 h-12 rounded-full flex items-center justify-center text-2xl
-            ${isAlive ? 'bg-gradient-to-br from-gray-100 to-gray-200' : 'bg-gray-300'}
-            dark:${isAlive ? 'from-zinc-700 to-zinc-800' : 'bg-gray-600'}
-          `}>
+          <motion.div 
+            whileHover={{ scale: 1.05 }}
+            className={`
+              ${compact ? 'w-8 h-8' : 'w-10 h-10'} 
+              rounded-full flex items-center justify-center text-lg
+              bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm
+              border border-white/30 dark:border-white/20
+              ${isAlive ? 'shadow-lg' : 'opacity-60'}
+            `}
+          >
             {player.avatar || '👤'}
-          </div>
+          </motion.div>
           
           {/* 状态指示器 */}
-          <div className={`absolute -bottom-1 -right-1 text-sm ${statusIndicator.color}`}>
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className={`absolute -bottom-1 -right-1 text-xs ${statusIndicator.color} 
+                       bg-white/80 dark:bg-black/80 rounded-full p-0.5 shadow-md backdrop-blur-sm`}
+          >
             {statusIndicator.icon}
-          </div>
+          </motion.div>
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center space-x-2">
-            <h3 className={`font-semibold truncate ${
-              isAlive ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'
-            }`}>
-              {player.name}
-            </h3>
-            
-            {/* AI难度标识 */}
-            {!player.isPlayer && player.aiDifficulty && (
-              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                player.aiDifficulty === 'easy' ? 'bg-green-100 text-green-600' :
-                player.aiDifficulty === 'medium' ? 'bg-yellow-100 text-yellow-600' :
-                'bg-red-100 text-red-600'
-              }`}>
-                {player.aiDifficulty === 'easy' ? '新手' :
-                 player.aiDifficulty === 'medium' ? '进阶' : '专家'}
-              </span>
-            )}
-          </div>
-
-          {/* AI性格标识 */}
-          {!player.isPlayer && player.aiPersonality && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {player.aiPersonality === 'logical' ? '逻辑型' :
-               player.aiPersonality === 'intuitive' ? '直觉型' :
-               player.aiPersonality === 'aggressive' ? '激进型' :
-               player.aiPersonality === 'conservative' ? '保守型' :
-               player.aiPersonality === 'leader' ? '领袖型' : '跟风型'} AI
-            </p>
+        {/* 玩家名称 */}
+        <div className="text-center">
+          <h3 className={`font-medium truncate ${compact ? 'text-xs' : 'text-sm'} ${
+            isAlive ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'
+          }`}>
+            {player.name}
+          </h3>
+          
+          {/* AI难度标识 */}
+          {!player.isPlayer && player.aiDifficulty && !compact && (
+            <motion.span 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className={`text-xs px-1.5 py-0.5 rounded-full backdrop-blur-sm border mt-1 inline-block ${
+                player.aiDifficulty === 'easy' ? 'bg-emerald-100/60 text-emerald-700 border-emerald-200/60' :
+                player.aiDifficulty === 'medium' ? 'bg-amber-100/60 text-amber-700 border-amber-200/60' :
+                'bg-red-100/60 text-red-700 border-red-200/60'
+              }`}
+            >
+              {player.aiDifficulty === 'easy' ? '新手' :
+               player.aiDifficulty === 'medium' ? '进阶' : '专家'}
+            </motion.span>
           )}
         </div>
       </div>
@@ -170,20 +207,19 @@ export const PlayerCard: FC<PlayerCardProps> = ({
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
-          className="mb-3"
+          transition={{ duration: 0.3 }}
+          className="mt-2"
         >
-          <div className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-sm font-medium ${roleConfig.color}`}>
-            <span>{roleConfig.icon}</span>
+          <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-lg text-xs font-medium 
+                          backdrop-blur-sm border ${roleConfig.color}`}>
+            <span className="text-sm">{roleConfig.icon}</span>
             <span>{roleConfig.name}</span>
           </div>
-          <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
-            {roleConfig.description}
-          </p>
         </motion.div>
       )}
 
       {/* 玩家状态信息 */}
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center justify-between text-xs mt-2">
         <div className={`flex items-center space-x-1 ${statusIndicator.color}`}>
           <span>{statusIndicator.icon}</span>
           <span className="font-medium">{statusIndicator.label}</span>
@@ -191,35 +227,37 @@ export const PlayerCard: FC<PlayerCardProps> = ({
 
         {/* 投票状态 */}
         {player.hasVoted && isAlive && (
-          <div className="flex items-center space-x-1 text-green-600 dark:text-green-400">
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="flex items-center space-x-1 text-emerald-500 dark:text-emerald-400"
+          >
             <span>✓</span>
-            <span className="text-xs">已投票</span>
-          </div>
+            <span className="text-xs font-medium">已投票</span>
+          </motion.div>
         )}
       </div>
 
       {/* 投票按钮（仅在可投票时显示） */}
       {canVote && !hasVoted && isAlive && !isCurrentPlayer && (
         <motion.div
-          className="mt-3 pt-3 border-t border-gray-200 dark:border-zinc-600"
+          className="mt-2 pt-2 border-t border-white/20 dark:border-white/10"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
         >
-          <button
-            className="w-full bg-gradient-to-r from-orange-400 to-red-500 hover:from-orange-500 hover:to-red-600 
-                     text-white font-medium py-2 px-4 rounded-lg transition-all duration-300
-                     transform hover:scale-105 active:scale-95"
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 
+                       hover:to-red-600 text-white font-medium py-1.5 px-2 rounded-lg
+                       shadow-lg shadow-orange-500/25 backdrop-blur-sm border border-white/20
+                       transition-all duration-200 text-xs
+                       active:shadow-lg active:shadow-orange-500/40
+                       touch-manipulation min-h-[32px]"
           >
-            投票出局
-          </button>
+            投票
+          </motion.button>
         </motion.div>
-      )}
-
-      {/* 已投票提示 */}
-      {hasVoted && canVote && (
-        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-zinc-600">
-          <div className="text-center text-sm text-gray-500 dark:text-gray-400">
-            已投票
-          </div>
-        </div>
       )}
     </motion.div>
   )

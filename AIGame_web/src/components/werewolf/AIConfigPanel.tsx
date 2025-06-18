@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { aiGameService } from '@/lib/aiService'
 import { getAPIConfig, saveAPIConfig, hasAPIConfig } from '@/lib/apiConfig'
 
 export function AIConfigPanel() {
   const [config, setConfig] = useState({
     openaiApiKey: '',
-    openaiModel: 'gpt-4o-mini',
-    openaiBaseUrl: 'httpshttps://api.openai-next.com/v1',
+    openaiModel: 'deepseek-r1',
+    openaiBaseUrl: 'https://api.openai-next.com/v1',
     enabled: true,
     maxTokens: 2000,
     temperature: 0.7
@@ -140,10 +140,11 @@ export function AIConfigPanel() {
           onChange={(e) => setConfig({...config, openaiModel: e.target.value})}
           className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-zinc-700 text-gray-900 dark:text-white"
         >
-          <option value="gpt-4o-mini">GPT-4o Mini (推荐)</option>
+          <option value="deepseek-r1">DeepSeek R1 (推荐)</option>
+          <option value="gpt-4o-mini">GPT-4o Mini</option>
           <option value="gpt-4o">GPT-4o</option>
           <option value="gpt-4">GPT-4</option>
-          <option value="deepseek-r1">GPT-3.5 Turbo</option>
+          <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
         </select>
       </div>
 

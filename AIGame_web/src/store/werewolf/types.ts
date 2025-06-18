@@ -39,6 +39,7 @@ export type NightActionType =
   | 'seer_check'    // 预言家查验
   | 'witch_save'    // 女巫救人
   | 'witch_poison'  // 女巫毒人
+  | 'witch_skip'    // 女巫跳过行动
   | 'guard_protect' // 守卫保护
 
 // 玩家状态 - 修复状态枚举

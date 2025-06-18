@@ -16,12 +16,21 @@ module.exports = {
         presets: [],
         darkMode: 'class', // or 'class'
         theme: {
-            extend: {
-                animation: {
-                    meteor: "meteor 5s linear infinite",
-                    aurora: "aurora 60s linear infinite",
-                    pulse: "pulse var(--duration) ease-out infinite",
-                },
+                    extend: {
+            animation: {
+                meteor: "meteor 5s linear infinite",
+                aurora: "aurora 60s linear infinite",
+                pulse: "pulse var(--duration) ease-out infinite",
+                'spin-slow': 'spin 3s linear infinite',
+                'bounce-slow': 'bounce 3s infinite',
+            },
+            backgroundImage: {
+                'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+                'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+            },
+            backdropBlur: {
+                'xs': '2px',
+            },
                 keyframes: {
                     meteor: {
                         "0%": { transform: "rotate(215deg) translateX(0)", opacity: 1 },

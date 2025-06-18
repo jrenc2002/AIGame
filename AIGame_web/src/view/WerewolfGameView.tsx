@@ -1,15 +1,9 @@
-import { type FC, useState, useEffect, useRef, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { type FC, useState, useEffect, useCallback } from 'react'
 import { useAtom, useSetAtom } from 'jotai'
 import toast from 'react-hot-toast'
+import { motion } from 'framer-motion'
 
-import { PlayerCard } from '@/components/werewolf/PlayerCard'
-import { GameBoard } from '@/components/werewolf/GameBoard'
-import { ChatPanel, type ChatMessage } from '@/components/werewolf/ChatPanel'
-import { AIConfigPanel } from '@/components/werewolf/AIConfigPanel'
-import { GameLogPanel } from '@/components/werewolf/GameLogPanel'
-import { GameDiscussionPanel } from '@/components/werewolf/GameDiscussionPanel'
-import { TurnBasedDiscussionPanel } from '@/components/werewolf/TurnBasedDiscussionPanel'
+import { type ChatMessage } from '@/components/werewolf/ChatPanel'
 import { CircularGameBoard } from '@/components/werewolf/CircularGameBoard'
 import { RoleDisplay } from '@/components/werewolf/RoleDisplay'
 import { APITestModal } from '@/components/werewolf/APITestModal'
@@ -24,17 +18,18 @@ import {
   gameLogsAtom,
   ROLE_CONFIGS
 } from '@/store/werewolf/gameState'
-import type { Player, GameState, GameLog, GamePhase } from '@/store/werewolf/types'
+import type { GameLog } from '@/store/werewolf/types'
 import { GameManager } from '@/core/GameManager'
 import { useGameManager } from '@/hooks/useGameManager'
 
 const WerewolfGameView: FC = () => {
   const [gameState, setGameState] = useAtom(gameStateAtom)
-  const [currentPlayer, setCurrentPlayer] = useAtom(currentPlayerAtom)
-  const setGameLogs = useSetAtom(gameLogsAtom)
+  const [currentPlayer, setCurrentPlayer] = useState<any>(null)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [gameLogs, setGameLogs] = useState<GameLog[]>([])
   
   const [showRoles, setShowRoles] = useState(false)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+
   const [showAPIModal, setShowAPIModal] = useState(false)
   const [apiModalProps, setApiModalProps] = useState({
     title: '',
@@ -354,12 +349,17 @@ const WerewolfGameView: FC = () => {
       
       // 获取游戏实例
       const gameInstance = gameManager.getGame(gameId)
-      if (!gameInstance || !gameInstance.engine.retryFailedAIRequest) {
-        throw new Error('游戏实例不存在或不支持重试功能')
+      if (!gameInstance) {
+        throw new Error('游戏实例不存在')
       }
       
-      // 调用游戏引擎的重试方法
-      await gameInstance.engine.retryFailedAIRequest(originalRequest)
+      // 调用游戏引擎的重试方法（使用类型断言）
+      const werewolfEngine = gameInstance.engine as any
+      if (werewolfEngine.retryFailedAIRequest) {
+        await werewolfEngine.retryFailedAIRequest(originalRequest)
+      } else {
+        throw new Error('游戏引擎不支持重试功能')
+      }
       
       toast.success('AI请求重试成功！', { id: 'ai-retry' })
       console.log('✅ AI请求重试成功')
@@ -378,59 +378,121 @@ const WerewolfGameView: FC = () => {
   const currentSpeaker = gameState.players.find(p => p.id === currentSpeakerId)
 
   return (
-    <div className="flex h-screen w-full bg-gray-900 text-white relative">
-      {/* 主游戏区域 */}
-      <div className="flex flex-1 flex-col">
-        {/* 圆桌游戏界面 */}
-        <div className="flex-1 min-h-0">
-          <CircularGameBoard
-            players={gameState.players}
-            currentPlayer={currentPlayer}
-            currentSpeaker={currentSpeaker}
-            onVote={handlePlayerVote}
-            canVote={gameState.currentPhase === 'day_voting' && currentPlayer?.status === 'active' && !currentPlayer.hasVoted}
-            gamePhase={gameState.currentPhase}
-            remainingTime={Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000))}
-            currentRound={gameState.currentRound}
-          />
-        </div>
-        
-        {/* 阶段推进按钮 */}
-        {currentPlayer && gameState.currentPhase !== 'game_over' && (
-          <div className="p-4 flex justify-center bg-gray-800 border-t border-gray-700">
-            <button
-              onClick={handleForceAdvancePhase}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors"
-            >
-              推进到下一阶段
-            </button>
-          </div>
-        )}
+    <div className="flex h-screen w-full bg-gradient-to-br from-slate-900 via-gray-900 to-black text-white relative overflow-hidden">
+      {/* 背景装饰 */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl transform -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl transform translate-x-1/2 translate-y-1/2" />
+        <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl transform -translate-x-1/2 -translate-y-1/2" />
       </div>
 
-      <div className="flex w-[400px] flex-col border-l border-gray-700 bg-gray-800">
-        <RoleDisplay 
-          role={currentPlayer?.role || 'villager'}
-          show={showRoles}
-          onClose={() => setShowRoles(false)}
-        />
-        
-        {/* 统一聊天面板头部 */}
-        <div className="p-4 border-b border-gray-600 bg-gray-700">
-          <h3 className="text-lg font-semibold text-white flex items-center space-x-2">
-            <span>💬</span>
-            <span>游戏进程</span>
-          </h3>
-          <p className="text-xs text-gray-400 mt-1">发言讨论与系统日志</p>
+      {/* 移动端布局 */}
+      <div className="flex flex-col lg:flex-row w-full relative z-10">
+        {/* 主游戏区域 */}
+        <div className="flex flex-1 flex-col lg:order-1 order-2">
+          {/* 游戏面板 */}
+          <div className="flex-1 relative min-h-[500px] lg:min-h-0">
+            <CircularGameBoard
+              players={gameState.players}
+              currentPlayer={currentPlayer}
+              currentSpeaker={currentSpeaker}
+              onVote={handlePlayerVote}
+              canVote={gameState.currentPhase === 'day_voting' && currentPlayer?.status === 'active' && !currentPlayer.hasVoted}
+              gamePhase={gameState.currentPhase}
+              remainingTime={Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000))}
+              currentRound={gameState.currentRound}
+            />
+            
+
+          </div>
+          
+
         </div>
-        
-        {/* 统一聊天面板 */}
-        <UnifiedChatPanel
-          onSpeak={handlePlayerSpeak}
-          onSkip={handleSkipSpeech}
-          onEndDiscussion={handleEndDiscussion}
-          currentPlayer={currentPlayer}
-        />
+
+        {/* 聊天面板区域 */}
+        <div className="flex flex-col lg:w-[400px] xl:w-[450px] w-full lg:order-2 order-1 
+                        lg:border-l border-white/10 bg-black/20 backdrop-blur-xl
+                        lg:h-screen h-auto lg:max-h-none max-h-[40vh]">
+          
+          {/* 角色显示 */}
+          <RoleDisplay 
+            role={currentPlayer?.role || 'villager'}
+            show={showRoles}
+            onClose={() => setShowRoles(false)}
+          />
+          
+          {/* 聊天面板头部 */}
+          <div className="p-4 lg:p-6 border-b border-white/10 bg-black/10 backdrop-blur-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl 
+                               flex items-center justify-center shadow-lg">
+                  <span className="text-lg">💬</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">游戏进程</h3>
+                  <p className="text-xs text-gray-400">发言讨论与系统日志</p>
+                </div>
+              </div>
+              
+              {/* 移动端收起按钮 */}
+              <button 
+                className="lg:hidden p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                title="收起聊天面板"
+                aria-label="收起聊天面板"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          {/* 统一聊天面板 */}
+          <div className="flex-1 lg:min-h-0 min-h-[300px]">
+            <UnifiedChatPanel
+              onSpeak={handlePlayerSpeak}
+              onSkip={handleSkipSpeech}
+              onEndDiscussion={handleEndDiscussion}
+              currentPlayer={currentPlayer}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 游戏状态指示器 - 移动端顶部 */}
+      <div className="absolute top-4 left-4 right-4 lg:hidden z-50">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="backdrop-blur-md bg-black/30 rounded-2xl p-4 border border-white/20"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg 
+                             flex items-center justify-center text-sm">
+                🎮
+              </div>
+              <div>
+                <div className="text-sm font-medium text-white">
+                  第 {gameState.currentRound} 轮 • {gameState.currentPhase === 'night' ? '夜晚' : 
+                  gameState.currentPhase === 'day_discussion' ? '讨论' : 
+                  gameState.currentPhase === 'day_voting' ? '投票' : '准备'}
+                </div>
+                <div className="text-xs text-gray-400">
+                  存活: {gameState.players.filter(p => p.status === 'active').length} 人
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-mono font-bold text-white">
+                {Math.floor(Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000)) / 60)}:
+                {(Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000)) % 60).toString().padStart(2, '0')}
+              </div>
+              <div className="text-xs text-gray-400">剩余时间</div>
+            </div>
+          </div>
+        </motion.div>
       </div>
 
       {/* 游戏暂停覆盖层 */}
@@ -444,18 +506,15 @@ const WerewolfGameView: FC = () => {
       <APITestModal
         isOpen={showAPIModal}
         onClose={handleAPIModalClose}
-        onSuccess={handleAPITestSuccess}
-        title={apiModalProps.title}
-        message={apiModalProps.message}
       />
 
-             {/* AI请求错误弹窗 */}
-       <AIRequestErrorModal
-         isOpen={showAIErrorModal}
-         onClose={() => setShowAIErrorModal(false)}
-         errorInfo={aiErrorInfo}
-         onRetry={handleAIRequestRetry}
-       />
+      {/* AI请求错误弹窗 */}
+      <AIRequestErrorModal
+        isOpen={showAIErrorModal}
+        onClose={() => setShowAIErrorModal(false)}
+        errorInfo={aiErrorInfo}
+        onRetry={handleAIRequestRetry}
+      />
     </div>
   )
 }

@@ -10,7 +10,7 @@ export interface ChatMessage {
   playerName: string
   message: string
   timestamp: number
-  emotion: 'neutral' | 'excited' | 'angry' | 'suspicious' | 'confident'
+  emotion: 'neutral' | 'suspicious' | 'defensive' | 'aggressive' | 'confident'
   confidence?: number
   isAI?: boolean
 }
@@ -158,7 +158,7 @@ export const ChatPanel: FC<ChatPanelProps> = ({
                     </div>
                     
                     {/* AI置信度指示器 */}
-                    {message.isAI && (
+                    {message.isAI && message.confidence && (
                       <div className="mt-1 text-xs opacity-70">
                         置信度: {Math.round(message.confidence * 100)}%
                       </div>

@@ -178,7 +178,7 @@ export class WerewolfGameStateMachine {
 
   // 检查游戏胜负
   checkGameEnd(): 'villager' | 'werewolf' | null {
-    const alivePlayers = this.currentState.players.filter(p => p.status === 'alive')
+    const alivePlayers = this.currentState.players.filter(p => p.status === 'active')
     const aliveWerewolves = alivePlayers.filter(p => p.camp === 'werewolf')
     const aliveVillagers = alivePlayers.filter(p => p.camp === 'villager')
 

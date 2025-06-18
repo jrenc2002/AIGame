@@ -27,11 +27,12 @@ export interface AIResponse {
 }
 
 export interface AIActionResponse {
-  content: string
+  content?: string
   action?: string
   target?: string
   reasoning?: string
   confidence?: number
+  metadata?: Record<string, any>
 }
 
 export interface StreamingAIResponse {
@@ -97,7 +98,8 @@ export class RetryableAIClient extends AIClient {
     maxDelay: 10000,
     backoffFactor: 2
   }) {
-    super(client.config)
+    // 访问受保护的config属性
+    super((client as any).config)
     this.client = client
     this.retryConfig = retryConfig
   }

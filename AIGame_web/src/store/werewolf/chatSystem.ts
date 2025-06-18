@@ -42,7 +42,7 @@ export interface ChatChannel {
 export class ChatSystem {
   private messages: ChatMessage[] = []
   private channels: Map<string, ChatChannel> = new Map()
-  private currentPlayerId: string = ''
+
   private messageListeners: ((message: ChatMessage) => void)[] = []
   private getPlayerById: (playerId: string) => Player | null = () => null
 
@@ -89,13 +89,13 @@ export class ChatSystem {
 
   // 设置当前玩家
   setCurrentPlayer(playerId: string): void {
-    this.currentPlayerId = playerId
+    // 设置当前玩家ID（已移除currentPlayerId属性）
   }
 
   // 更新频道参与者
   updateChannelParticipants(players: Player[]): void {
-    const alivePlayers = players.filter(p => p.status === 'alive')
-    const deadPlayers = players.filter(p => p.status === 'dead')
+    const alivePlayers = players.filter(p => p.status === 'active')
+    const deadPlayers = players.filter(p => p.status === 'eliminated')
     const werewolfPlayers = alivePlayers.filter(p => p.camp === 'werewolf')
 
     // 更新公开频道
@@ -170,7 +170,7 @@ export class ChatSystem {
     switch (message.chatType) {
       case 'public':
         // 公开消息：存活玩家可见
-        return player.status === 'alive'
+        return player.status === 'active'
 
       case 'private':
         // 私聊消息：发送者或接收者可见
@@ -182,7 +182,7 @@ export class ChatSystem {
 
       case 'dead':
         // 死亡消息：死亡玩家可见
-        return player.status === 'dead'
+        return player.status === 'eliminated'
 
       case 'system':
         // 系统消息：所有人可见
@@ -213,13 +213,13 @@ export class ChatSystem {
   private canAccessChannel(channel: ChatChannel, player: Player): boolean {
     switch (channel.type) {
       case 'public':
-        return player.status === 'alive'
+        return player.status === 'active'
 
       case 'werewolf':
-        return player.camp === 'werewolf' && player.status === 'alive'
+        return player.camp === 'werewolf' && player.status === 'active'
 
       case 'dead':
-        return player.status === 'dead'
+        return player.status === 'eliminated'
 
       case 'system':
         return true
@@ -231,7 +231,9 @@ export class ChatSystem {
 
   // 创建私聊频道
   createPrivateChannel(player1Id: string, player2Id: string): ChatChannel {
-    const channelId = `private_${Math.min(player1Id, player2Id)}_${Math.max(player1Id, player2Id)}`
+    const id1 = parseInt(player1Id) || 0
+    const id2 = parseInt(player2Id) || 0
+    const channelId = `private_${Math.min(id1, id2)}_${Math.max(id1, id2)}`
     
     if (this.channels.has(channelId)) {
       return this.channels.get(channelId)!
@@ -274,7 +276,9 @@ export class ChatSystem {
 
   // 获取私聊频道ID
   private getPrivateChannelId(player1Id: string, player2Id: string): string {
-    return `private_${Math.min(player1Id, player2Id)}_${Math.max(player1Id, player2Id)}`
+    const id1 = parseInt(player1Id) || 0
+    const id2 = parseInt(player2Id) || 0
+    return `private_${Math.min(id1, id2)}_${Math.max(id1, id2)}`
   }
 
   // 添加消息监听器
@@ -336,6 +340,4 @@ export const currentChatTypeAtom = atom<ChatType>('public')
 export const availableChannelsAtom = atom<ChatChannel[]>([])
 
 // 聊天系统状态更新器
-export const updateChatMessages = (messages: ChatMessage[]) => {
-  // 这个函数将在组件中使用来更新消息状态
-} 
+ 

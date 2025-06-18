@@ -1,6 +1,6 @@
 import { GameEngine } from '../../core/game/GameEngine'
-import { GameState as BaseGameState, GamePhase, RoleType, CampType, NightAction, Vote, GameLog, PlayerSpeech, GameEventType, SpeechEmotion, GameState, Player } from '../../store/werewolf/types'
-import { AIClient, AIMessage, AIActionResponse } from '../../core/ai/AIClient'
+import { GamePhase, RoleType, NightAction, Vote, GameLog, PlayerSpeech, GameEventType, SpeechEmotion, GameState, Player, GameSettings } from '../../store/werewolf/types'
+import { AIMessage, AIActionResponse } from '../../core/ai/AIClient'
 import type { AIActionRequest } from '../../core/game/GameEngine'
 import {
   WEREWOLF_SYSTEM_PROMPT,
@@ -44,7 +44,7 @@ export interface WerewolfGameState extends GameState {
   playerSpeeches: PlayerSpeech[]
   
   // 游戏设置
-  settings: Record<string, any>
+  settings: GameSettings
   
   // 新增发言轮次管理字段
   currentSpeakerIndex?: number
@@ -58,6 +58,8 @@ export interface WerewolfGameState extends GameState {
 // 扩展玩家接口以符合狼人杀需求，同时兼容基础Player
 export interface WerewolfPlayer extends Player {
   // 基础属性继承自Player
+  // 添加GamePlayer所需的isAI属性
+  isAI: boolean
   // 额外狼人杀专用属性
   votesReceived: number
   hasVoted: boolean
@@ -248,7 +250,7 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
         }
 
         const messages = this.buildAIPrompt(request)
-        const response = await aiClient.sendMessage(messages)
+        const response = await aiClient.chat(messages)
         
         console.log(`🔍 AI原始响应 (尝试 ${attempt}):`, response.content)
         errorLogs.push(`🔍 尝试 ${attempt} - AI原始响应: ${response.content.substring(0, 200)}...`)
@@ -599,11 +601,8 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
       .filter(Boolean) as string[]
 
     for (const witch of witches) {
-      const availableNightActions = this.getAvailableNightActions(witch)
-      if (availableNightActions.length === 0) {
-        console.log(`💊 女巫${witch.name}没有可用行动，跳过`)
-        continue
-      }
+      // 女巫总是有行动可选，不需要检查getAvailableNightActions
+      console.log(`💊 处理女巫${witch.name}的行动选择`)
 
       // 构建女巫的可选行动
       let availableActions: string[] = []
@@ -988,9 +987,15 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
         actions.push('check')
         break
       case 'witch':
+        // 女巫总是有行动可选：
+        // 1. 如果还有解药，可以救人
+        // 2. 总是可以毒人
+        // 3. 总是可以跳过
         if (!player.hasUsedSkill) {
-          actions.push('save', 'poison')
+          actions.push('save')  // 有解药时可以救人
         }
+        actions.push('poison')   // 总是可以毒人
+        actions.push('skip')     // 总是可以跳过
         break
       case 'guard':
         actions.push('guard')
@@ -1346,15 +1351,15 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
     })
     
     // 监听讨论轮次开始事件，自动触发AI发言
-    this.on('discussion_turn_start', async (playerId) => {
-      console.log(`🗣️ 发言轮次开始: ${playerId}`)
+    this.on('discussion_turn_start', async (event: any) => {
+      console.log(`🗣️ 发言轮次开始: ${event.playerId}`)
       
-      const player = this.gameState.players.find(p => p.id === playerId)
+      const player = this.gameState.players.find(p => p.id === event.playerId)
       if (player && !player.isPlayer && player.status === 'active') {
         // AI玩家自动发言
         console.log(`🗣️ 触发AI玩家 ${player.name} 自动发言`)
         setTimeout(() => {
-          this.processSpeechTurn(playerId)
+          this.processSpeechTurn(event.playerId)
         }, 1000) // 延迟1秒给UI反应时间
       }
     })
@@ -1548,6 +1553,7 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
       case 'check': return 'seer_check'
       case 'save': return 'witch_save'
       case 'poison': return 'witch_poison'
+      case 'witch_skip': return 'witch_skip'
       case 'guard': return 'guard_protect'
       default: return 'werewolf_kill'
     }
@@ -1760,9 +1766,10 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
       a.actionType === 'werewolf_kill' && aliveWerewolves.some(w => w.id === a.playerId)
     )
     
-    // 检查特殊角色是否已行动
+    // 检查特殊角色是否已行动（包括跳过行动）
     const specialRoleActions = this.gameState.nightActions.filter(a => 
-      aliveSpecialRoles.some(p => p.id === a.playerId)
+      aliveSpecialRoles.some(p => p.id === a.playerId) && 
+      ['seer_check', 'witch_save', 'witch_poison', 'witch_skip', 'guard_protect'].includes(a.actionType)
     )
     
     // 对于AI狼人，只要有狼人行动就算完成（团队决策）
@@ -2019,9 +2026,15 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
           continue
         }
         
-        // 跳过行动
+        // 跳过行动 - 需要记录一个虚拟行动，以便isNightActionsComplete能正确计算
         if (selectedAction === 'skip') {
           console.log(`💊 女巫${player.name}选择不采取行动`)
+          
+          // 记录跳过行动，使用特殊的action type
+          await this.processNightAction(request.playerId, {
+            type: 'witch_skip',
+            targetId: undefined
+          })
           continue
         }
         

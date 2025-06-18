@@ -36,7 +36,7 @@ export abstract class BaseAIService {
     
     this.config = {
       provider: 'openai',
-      model: apiConfig.openaiModel || 'gpt-4o-mini',
+      model: apiConfig.openaiModel || 'deepseek-r1',
       maxTokens: apiConfig.maxTokens || 2000,
       temperature: apiConfig.temperature || 0.7,
       timeout: 30000,

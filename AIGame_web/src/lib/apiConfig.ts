@@ -14,7 +14,7 @@ export interface APIConfig {
 // 默认配置（不包含任何敏感信息）
 const DEFAULT_CONFIG: APIConfig = {
   openaiApiKey: '',
-  openaiModel: 'gpt-4o-mini',
+  openaiModel: 'deepseek-r1',
   openaiBaseUrl: 'https://api.openai-next.com/v1',
   qianfanApiKey: '',
   qianfanSecretKey: '',

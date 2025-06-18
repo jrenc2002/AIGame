@@ -1,4 +1,4 @@
-import { type FC, useState, useEffect } from 'react'
+import { type FC, useState } from 'react'
 import { useAtomValue } from 'jotai'
 import { motion, AnimatePresence } from 'framer-motion'
 import { discussionSpeechesAtom, gameStateAtom } from '@/store/werewolf/gameState'

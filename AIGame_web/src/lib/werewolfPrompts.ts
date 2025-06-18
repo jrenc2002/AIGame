@@ -1,7 +1,7 @@
 // 狼人杀专业系统提示词
 // 重构版本 - 更清晰、更精确的AI指令
 
-import { Player, GameState, RoleType, GamePhase } from '@/store/werewolf/types'
+import { Player, GameState, RoleType } from '@/store/werewolf/types'
 
 /**
  * 分层prompt系统 - 核心系统指令（精简版）

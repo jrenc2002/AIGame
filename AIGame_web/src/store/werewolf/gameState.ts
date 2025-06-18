@@ -29,6 +29,7 @@ export const initialGameState: GameState = {
   gameId: '',
   currentRound: 0,
   currentPhase: 'preparation',
+  isActive: false,
   isGameActive: false,
   players: [],
   deadPlayers: [],
@@ -45,22 +46,10 @@ export const initialGameState: GameState = {
 export const gameStateAtom = atom<GameState>(initialGameState)
 
 // 游戏日志原子 - 仅系统事件
-export const gameLogsAtom = atom<GameLog[]>(
-  (get) => get(gameStateAtom).gameLogs,
-  (get, set, newLogs: GameLog[]) => {
-    const currentState = get(gameStateAtom)
-    set(gameStateAtom, { ...currentState, gameLogs: newLogs })
-  }
-)
+export const gameLogsAtom = atom<GameLog[]>((get) => get(gameStateAtom).gameLogs)
 
 // 玩家发言记录原子
-export const playerSpeechesAtom = atom<PlayerSpeech[]>(
-  (get) => get(gameStateAtom).playerSpeeches,
-  (get, set, newSpeeches: PlayerSpeech[]) => {
-    const currentState = get(gameStateAtom)
-    set(gameStateAtom, { ...currentState, playerSpeeches: newSpeeches })
-  }
-)
+export const playerSpeechesAtom = atom<PlayerSpeech[]>((get) => get(gameStateAtom).playerSpeeches)
 
 // 当前回合发言记录原子
 export const currentRoundSpeechesAtom = atom<PlayerSpeech[]>((get) => {
@@ -90,17 +79,7 @@ export const currentPlayerAtom = atom<Player | null>(null)
 export const gameSettingsAtom = atom<GameSettings>(defaultGameSettings)
 
 // 当前阶段原子
-export const currentPhaseAtom = atom<GamePhase>(
-  (get) => get(gameStateAtom).currentPhase,
-  (get, set, newPhase: GamePhase) => {
-    const gameState = get(gameStateAtom)
-    set(gameStateAtom, {
-      ...gameState,
-      currentPhase: newPhase,
-      phaseStartTime: Date.now()
-    })
-  }
-)
+export const currentPhaseAtom = atom<GamePhase>((get) => get(gameStateAtom).currentPhase)
 
 // 活跃玩家原子（存活的玩家）
 export const alivePlayersAtom = atom<Player[]>((get) => {
@@ -281,7 +260,7 @@ export const phaseTransitionAtom = atom(
           phaseStartTime: Date.now(),
           phaseTimeLimit: nextDuration,
           players: gameState.players.map(p => 
-            p.id === eliminatedPlayerId ? { ...p, status: 'dead' } : p
+            p.id === eliminatedPlayerId ? { ...p, status: 'eliminated' as const } : p
           ),
           deadPlayers: [...gameState.deadPlayers, ...gameState.players.filter(p => p.id === eliminatedPlayerId)],
           votes: [], // 清空投票
@@ -290,6 +269,10 @@ export const phaseTransitionAtom = atom(
             id: Date.now().toString(),
             round: gameState.currentRound,
             phase: 'day_voting',
+            eventType: 'voting_result',
+            description: eliminatedPlayerId ? 
+              `投票结束，${gameState.players.find(p => p.id === eliminatedPlayerId)?.name} 被投票出局` :
+              '投票结束，没有玩家被出局',
             action: eliminatedPlayerId ? 
               `投票结束，${gameState.players.find(p => p.id === eliminatedPlayerId)?.name} 被投票出局` :
               '投票结束，没有玩家被出局',
@@ -321,7 +304,7 @@ export const canVoteAtom = atom<boolean>((get) => {
   const currentPlayer = get(currentPlayerAtom)
   
   return gameState.currentPhase === 'day_voting' && 
-         currentPlayer?.status === 'alive' && 
+         currentPlayer?.status === 'active' && 
          !currentPlayer?.hasVoted
 })
 

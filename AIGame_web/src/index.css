@@ -2,6 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 现代化滚动条样式 */
+@layer components {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  
+  .scrollbar-thumb-white\/20::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
+  }
+  
+  .scrollbar-track-transparent::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+  
+  .hover\:scrollbar-thumb-white\/30:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+  
+  /* 移动端触摸优化 */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  /* 毛玻璃效果增强 */
+  .backdrop-blur-3xl {
+    -webkit-backdrop-filter: blur(64px);
+    backdrop-filter: blur(64px);
+  }
+  
+  /* 渐变径向背景 */
+  .bg-gradient-radial {
+    background-image: radial-gradient(var(--tw-gradient-stops));
+  }
+}
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

@@ -48,16 +48,6 @@ export const NewWerewolfGame: React.FC<NewWerewolfGameProps> = ({ onGameCreated 
     }
   }
 
-  // 执行玩家行动
-  const handlePlayerAction = async (action: any) => {
-    if (!gameId) return
-    try {
-      await executeAction(gameId, 'player_1', action)
-    } catch (err) {
-      console.error('执行行动失败:', err)
-    }
-  }
-
   // 渲染游戏配置
   const renderGameConfig = () => (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">

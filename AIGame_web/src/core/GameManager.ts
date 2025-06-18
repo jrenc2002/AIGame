@@ -63,10 +63,30 @@ export class GameManager {
       playerSpeeches: [],
         phaseStartTime: Date.now(),
         phaseTimeLimit: 0,
-        settings: config.customSettings || {}
+        settings: {
+          totalPlayers: config.playerCount,
+          werewolfCount: Math.floor(config.playerCount / 3),
+          specialRoles: ['seer', 'witch', 'hunter'] as const,
+          timeLimit: {
+            discussion: 180,
+            night: 120
+          },
+          aiSettings: {
+            difficulty: 'medium' as const,
+            personalityDistribution: {
+              logical: 0.2,
+              intuitive: 0.15,
+              aggressive: 0.15,
+              conservative: 0.2,
+              leader: 0.15,
+              follower: 0.15
+            }
+          },
+          ...(config.customSettings || {})
+        }
       }
       
-      const engine = new WerewolfGameEngine(initialState)
+      const engine = new WerewolfGameEngine(initialState as any)
       
       // 为AI玩家注册客户端
       await this.setupAIClients(engine, config)
@@ -94,8 +114,8 @@ export class GameManager {
         players: engine.getGameState().players.map(p => ({
           id: p.id,
           name: p.name,
-          isAI: p.isAI || !p.isPlayer,
-          status: p.status === 'alive' ? 'active' : p.status === 'dead' ? 'eliminated' : p.status
+          isAI: (p as any).isAI || !(p as any).isPlayer,
+          status: p.status
         }))
       }
 

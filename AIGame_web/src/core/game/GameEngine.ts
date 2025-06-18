@@ -1,4 +1,4 @@
-import { AIClient, AIMessage, AIResponse, StreamingAIResponse } from '../ai/AIClient'
+import { AIClient, AIMessage, StreamingAIResponse } from '../ai/AIClient'
 
 // 游戏状态接口
 export interface GameState {
@@ -33,10 +33,11 @@ export interface AIActionRequest {
 
 // AI行动响应
 export interface AIActionResponse {
-  action: string
-  reasoning: string
-  confidence: number
+  action?: string
+  reasoning?: string
+  confidence?: number
   message?: string
+  content?: string
   metadata?: Record<string, any>
 }
 

@@ -1,7 +1,7 @@
 import { CoreMessage } from 'ai'
-import { BaseAIService, AIResponse, AIStreamResponse, AIServiceConfig } from './BaseAIService'
-import { Player, GameState, RoleType, GamePhase } from '@/store/werewolf/types'
-import { buildWerewolfPrompt, buildDecisionPrompt, parseAIResponse } from '../werewolfPrompts'
+import { BaseAIService, AIResponse, AIServiceConfig } from './BaseAIService'
+import { Player, GameState } from '@/store/werewolf/types'
+import { buildWerewolfPrompt, buildDecisionPrompt } from '../werewolfPrompts'
 import { RobustJSONParser } from './RobustJSONParser'
 
 // 狼人杀AI决策结果
@@ -73,9 +73,9 @@ export class WerewolfContextBuilder {
     // 获取游戏日志中的发言记录 - 更新匹配规则
     const speechLogs = gameState.gameLogs.filter(log => 
       log.isPublic && (
-        log.action.includes('💬') || 
-        log.action.includes('发言:') ||
-        (log.action.includes(':') && !log.action.includes('💀') && !log.action.includes('🗳️') && !log.action.includes('🔮') && !log.action.includes('🐺'))
+                log.action?.includes('💬') ||
+        log.action?.includes('发言:') ||
+        (log.action?.includes(':') && !log.action?.includes('💀') && !log.action?.includes('🗳️') && !log.action?.includes('🔮') && !log.action?.includes('🐺'))
       )
     ).slice(-10) // 最近10条发言
 
@@ -92,14 +92,14 @@ export class WerewolfContextBuilder {
         }
         
         // 清理发言内容
-        if (speech.includes('💬')) {
+        if (speech?.includes('💬')) {
           speech = speech.replace('💬', '').trim()
           const parts = speech.split(':')
           if (parts.length >= 2) {
             playerName = parts[0].trim()
             speech = parts.slice(1).join(':').trim()
           }
-        } else if (speech.includes('发言:')) {
+        } else if (speech?.includes('发言:')) {
           speech = speech.replace('发言:', '').trim()
         }
         
@@ -115,19 +115,19 @@ export class WerewolfContextBuilder {
     // 添加游戏重要事件 - 更新匹配规则
     const importantEvents = gameState.gameLogs.filter(log =>
       log.isPublic && (
-        log.action.includes('💀') ||          // 死亡事件
-        log.action.includes('被杀死') ||      
-        log.action.includes('出局') ||        // 投票出局
-        log.action.includes('🗳️') ||          // 投票相关
-        log.action.includes('投票') ||
-        log.action.includes('🔮') ||          // 预言家查验
-        log.action.includes('💊') ||          // 女巫行动
-        log.action.includes('☠️') ||          // 毒杀
-        log.action.includes('🛡️') ||          // 守卫保护
-        log.action.includes('🔫') ||          // 猎人开枪
-        log.action.includes('技能') ||
-        log.action.includes('夜晚') ||
-        log.action.includes('平安夜')
+                log.action?.includes('💀') ||          // 死亡事件
+        log.action?.includes('被杀死') ||
+        log.action?.includes('出局') ||        // 投票出局
+        log.action?.includes('🗳️') ||          // 投票相关
+        log.action?.includes('投票') ||
+        log.action?.includes('🔮') ||          // 预言家查验
+        log.action?.includes('💊') ||          // 女巫行动
+        log.action?.includes('☠️') ||          // 毒杀
+        log.action?.includes('🛡️') ||          // 守卫保护
+        log.action?.includes('🔫') ||          // 猎人开枪
+        log.action?.includes('技能') ||
+        log.action?.includes('夜晚') ||
+        log.action?.includes('平安夜')
       )
     ).slice(-8) // 最近8个重要事件
 
@@ -167,8 +167,8 @@ export class WerewolfContextBuilder {
     gameState: GameState,
     additionalContext?: string
   ): string {
-    const alivePlayers = gameState.players.filter(p => p.status === 'alive')
-    const deadPlayers = gameState.players.filter(p => p.status === 'dead')
+    const alivePlayers = gameState.players.filter(p => p.status === 'active')
+    const deadPlayers = gameState.players.filter(p => p.status === 'eliminated')
     
     let prompt = `当前游戏状态分析：
 - 你是：${player.name}（${player.role}）
@@ -203,7 +203,7 @@ export class WerewolfContextBuilder {
 export class WerewolfAIService extends BaseAIService {
   constructor(config?: Partial<AIServiceConfig>) {
     super({
-      model: 'gpt-4o-mini',
+      model: 'deepseek-r1',
       maxTokens: 2000,
       temperature: 0.8,
       ...config

@@ -41,7 +41,7 @@ export class OpenAIClient extends AIClient {
   constructor(config: AIClientConfig) {
     super({
       baseURL: 'https://api.openai-next.com/v1',
-      model: 'gpt-4o-mini',
+      model: 'deepseek-r1',
       temperature: 0.7,
       topP: 1.0,
       maxTokens: 2000,

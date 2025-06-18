@@ -1,26 +1,18 @@
 import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { getAPIConfig, saveAPIConfig, hasValidAPIConfig, APIConfig } from '@/lib/apiConfig'
+import { getAPIConfig, saveAPIConfig } from '@/lib/apiConfig'
 import { aiGameService } from '@/lib/aiService'
-import toast from 'react-hot-toast'
 
 interface APITestModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: () => void
-  title?: string
-  message?: string
 }
 
-export const APITestModal: FC<APITestModalProps> = ({
+export const APITestModal: React.FC<APITestModalProps> = ({
   isOpen,
-  onClose,
-  onSuccess,
-  title = "🤖 AI服务暂停",
-  message = "AI服务暂时不可用，请检查并测试API配置"
+  onClose
 }) => {
   const [apiKey, setApiKey] = useState('sk-...')
-  const [model, setModel] = useState('gpt-4o-mini')
+  const [model, setModel] = useState('deepseek-r1')
   const [baseUrl, setBaseUrl] = useState('https://api.openai-next.com/v1')
   const [testMessage, setTestMessage] = useState('')
   const [response, setResponse] = useState('')
@@ -102,23 +94,7 @@ export const APITestModal: FC<APITestModalProps> = ({
     }
   }
 
-  const getStatusIcon = () => {
-    switch (error ? 'error' : 'success') {
-      case 'testing': return '⏳'
-      case 'success': return '✅'
-      case 'error': return '❌'
-      default: return '🔧'
-    }
-  }
 
-  const getStatusColor = () => {
-    switch (error ? 'error' : 'success') {
-      case 'testing': return 'text-blue-600'
-      case 'success': return 'text-green-600'
-      case 'error': return 'text-red-600'
-      default: return 'text-gray-600'
-    }
-  }
 
   if (!isOpen) return null
 
@@ -153,11 +129,13 @@ export const APITestModal: FC<APITestModalProps> = ({
               value={model}
               onChange={(e) => setModel(e.target.value)}
               className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+              aria-label="选择AI模型"
             >
+              <option value="deepseek-r1">DeepSeek R1 (推荐)</option>
               <option value="gpt-4o-mini">GPT-4o Mini</option>
               <option value="gpt-4o">GPT-4o</option>
               <option value="gpt-4">GPT-4</option>
-              <option value="deepseek-r1">GPT-3.5 Turbo</option>
+              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
             </select>
           </div>
 
@@ -219,42 +197,3 @@ export const APITestModal: FC<APITestModalProps> = ({
   )
 }
 
-// API测试服务
-class TestAPIService {
-  async testConnection() {
-    const apiConfig = getAPIConfig()
-    const apiKey = apiConfig.openaiApiKey
-    const baseURL = apiConfig.openaiBaseUrl
-    
-    if (!apiKey || apiKey === 'fallback_ai_mode') {
-      throw new Error('API密钥未设置')
-    }
-    
-    // 使用fetch测试API连接
-    const response = await fetch(`${baseURL}/models`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    })
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`API响应错误 (${response.status}): ${errorText}`)
-    }
-    
-    const data = await response.json()
-    
-    // 如果models为空数组，也算失败
-    if (!data.data || data.data.length === 0) {
-      throw new Error('API返回空模型列表')
-    }
-    
-    // 返回成功信息
-    return {
-      model: data.data[0].id,
-      models: data.data.map((m: any) => m.id)
-    }
-  }
-} 
