@@ -386,43 +386,68 @@ const WerewolfGameView: FC = () => {
         <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl transform -translate-x-1/2 -translate-y-1/2" />
       </div>
 
-      {/* 移动端布局 */}
-      <div className="flex flex-col lg:flex-row w-full relative z-10">
-        {/* 主游戏区域 */}
-        <div className="flex flex-1 flex-col lg:order-1 order-2">
-          {/* 游戏面板 */}
-          <div className="flex-1 relative min-h-[500px] lg:min-h-0">
-            <CircularGameBoard
-              players={gameState.players}
-              currentPlayer={currentPlayer}
-              currentSpeaker={currentSpeaker}
-              onVote={handlePlayerVote}
-              canVote={gameState.currentPhase === 'day_voting' && currentPlayer?.status === 'active' && !currentPlayer.hasVoted}
-              gamePhase={gameState.currentPhase}
-              remainingTime={Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000))}
-              currentRound={gameState.currentRound}
-            />
-            
-
+      {/* 主要布局容器 - 使用flexbox确保对齐 */}
+      <div className="flex flex-col lg:flex-row w-full relative z-10 h-full">
+        
+        {/* 游戏主面板区域 */}
+        <div className="flex flex-col flex-1 lg:order-1 order-2 min-h-0">
+          {/* 移动端顶部状态栏 */}
+          <div className="lg:hidden p-4 bg-black/20 backdrop-blur-xl border-b border-white/10">
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-between"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg 
+                               flex items-center justify-center text-sm">
+                  🎮
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-white">
+                    第 {gameState.currentRound} 轮 • {gameState.currentPhase === 'night' ? '夜晚' : 
+                    gameState.currentPhase === 'day_discussion' ? '讨论' : 
+                    gameState.currentPhase === 'day_voting' ? '投票' : '准备'}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    存活: {gameState.players.filter(p => p.status === 'active').length} 人
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-mono font-bold text-white">
+                  {Math.floor(Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000)) / 60)}:
+                  {(Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000)) % 60).toString().padStart(2, '0')}
+                </div>
+                <div className="text-xs text-gray-400">剩余时间</div>
+              </div>
+            </motion.div>
           </div>
-          
 
+          {/* 游戏板容器 - 使用flex确保居中和填充 */}
+          <div className="flex-1 flex items-center justify-center p-4 lg:p-8 min-h-0">
+            <div className="w-full h-full max-w-4xl max-h-full flex items-center justify-center">
+              <CircularGameBoard
+                players={gameState.players}
+                currentPlayer={currentPlayer}
+                currentSpeaker={currentSpeaker}
+                onVote={handlePlayerVote}
+                canVote={gameState.currentPhase === 'day_voting' && currentPlayer?.status === 'active' && !currentPlayer.hasVoted}
+                gamePhase={gameState.currentPhase}
+                remainingTime={Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000))}
+                currentRound={gameState.currentRound}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* 聊天面板区域 */}
-        <div className="flex flex-col lg:w-[400px] xl:w-[450px] w-full lg:order-2 order-1 
-                        lg:border-l border-white/10 bg-black/20 backdrop-blur-xl
-                        lg:h-screen h-auto lg:max-h-none max-h-[40vh]">
-          
-          {/* 角色显示 */}
-          <RoleDisplay 
-            role={currentPlayer?.role || 'villager'}
-            show={showRoles}
-            onClose={() => setShowRoles(false)}
-          />
+        {/* 聊天面板区域 - 固定宽度，统一布局 */}
+        <div className="flex flex-col lg:w-[420px] xl:w-[480px] w-full lg:order-2 order-1 
+                        lg:border-l border-t lg:border-t-0 border-white/10 bg-black/20 backdrop-blur-xl
+                        lg:h-full h-auto lg:max-h-none max-h-[40vh] lg:min-h-0 min-h-[300px]">
           
           {/* 聊天面板头部 */}
-          <div className="p-4 lg:p-6 border-b border-white/10 bg-black/10 backdrop-blur-sm">
+          <div className="flex-shrink-0 p-4 lg:p-6 border-b border-white/10 bg-black/10 backdrop-blur-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl 
@@ -448,8 +473,8 @@ const WerewolfGameView: FC = () => {
             </div>
           </div>
           
-          {/* 统一聊天面板 */}
-          <div className="flex-1 lg:min-h-0 min-h-[300px]">
+          {/* 统一聊天面板 - 弹性填充剩余空间 */}
+          <div className="flex-1 min-h-0 overflow-hidden">
             <UnifiedChatPanel
               onSpeak={handlePlayerSpeak}
               onSkip={handleSkipSpeech}
@@ -460,40 +485,12 @@ const WerewolfGameView: FC = () => {
         </div>
       </div>
 
-      {/* 游戏状态指示器 - 移动端顶部 */}
-      <div className="absolute top-4 left-4 right-4 lg:hidden z-50">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="backdrop-blur-md bg-black/30 rounded-2xl p-4 border border-white/20"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg 
-                             flex items-center justify-center text-sm">
-                🎮
-              </div>
-              <div>
-                <div className="text-sm font-medium text-white">
-                  第 {gameState.currentRound} 轮 • {gameState.currentPhase === 'night' ? '夜晚' : 
-                  gameState.currentPhase === 'day_discussion' ? '讨论' : 
-                  gameState.currentPhase === 'day_voting' ? '投票' : '准备'}
-                </div>
-                <div className="text-xs text-gray-400">
-                  存活: {gameState.players.filter(p => p.status === 'active').length} 人
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-lg font-mono font-bold text-white">
-                {Math.floor(Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000)) / 60)}:
-                {(Math.max(0, Math.floor((gameState.phaseStartTime + gameState.phaseTimeLimit * 1000 - currentTime) / 1000)) % 60).toString().padStart(2, '0')}
-              </div>
-              <div className="text-xs text-gray-400">剩余时间</div>
-            </div>
-          </div>
-        </motion.div>
-      </div>
+      {/* 角色显示覆盖层 */}
+      <RoleDisplay 
+        role={currentPlayer?.role || 'villager'}
+        show={showRoles}
+        onClose={() => setShowRoles(false)}
+      />
 
       {/* 游戏暂停覆盖层 */}
       <GamePauseOverlay
