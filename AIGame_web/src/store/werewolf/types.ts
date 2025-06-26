@@ -86,6 +86,9 @@ export interface Player {
   aiPersonality?: AIPersonality
   suspicionLevels?: Map<string, number> // 对其他玩家的怀疑度
   
+  // AI推理记忆系统
+  reasoningMemory?: AIReasoningMemory
+  
   // 游戏统计
   votesReceived: number
   hasVoted: boolean
@@ -144,7 +147,7 @@ export interface PlayerSpeech {
   
   // AI专用字段
   reasoning?: string // AI推理过程（不参与context构建）
-  confidence?: number // AI置信度
+  confidence?: number // AI置信度（0-1之间）
   
   // 可见性控制
   isVisible: boolean // 是否对其他玩家可见
@@ -176,8 +179,14 @@ export interface GameState {
   // 游戏日志 - 仅系统事件
   gameLogs: GameLog[]
   
-  // 玩家发言记录 - 单独管理
+  // 玩家发言记录 - 单独管理，保存全部对话
   playerSpeeches: PlayerSpeech[]
+  
+  // AI推理记忆存储
+  aiReasoningMemories: AIReasoningMemory[]
+  
+  // AI提示词和上下文日志
+  aiPromptLogs: AIPromptLog[]
   
   // 时间控制
   phaseStartTime: number
@@ -247,4 +256,63 @@ export interface RoleConfig {
   winCondition: string
   icon: string
   color: string
+}
+
+// 玩家推理笔记接口
+export interface PlayerInference {
+  playerId: string
+  playerName: string
+  suspicionLevel: number // 0-1之间的怀疑度
+  behaviorPattern: string[] // 行为模式记录
+  keyObservations: string[] // 关键观察
+  lastUpdated: number
+}
+
+// AI推理记忆系统
+export interface AIReasoningMemory {
+  playerId: string // AI玩家ID
+  gameId: string
+  round: number
+  inferences: PlayerInference[] // 对其他玩家的推理
+  gameStrategy: string // 当前游戏策略
+  personalNotes: string[] // 个人笔记
+  lastUpdated: number
+}
+
+// AI提示词和上下文日志
+export interface AIPromptLog {
+  id: string
+  timestamp: number
+  playerId: string
+  playerName: string
+  gamePhase: GamePhase
+  round: number
+  actionType: string // 'speech' | 'vote' | 'kill' | 'check' | 'save' | 'poison' | 'guard'
+  
+  // 上下文信息
+  contextInfo: {
+    systemPrompt: string // 系统提示词
+    gameContext: string // 游戏状态上下文
+    speechHistory: string // 发言历史
+    eventHistory: string // 事件历史
+    reasoningMemory?: string // 推理记忆
+    availableTargets?: string[] // 可选目标
+    additionalContext?: string // 额外上下文
+  }
+  
+  // 完整prompt
+  fullPrompt: string
+  
+  // AI响应
+  aiResponse?: {
+    rawResponse: string
+    parsedResponse: any
+    processingTime: number
+  }
+  
+  // 错误信息
+  error?: {
+    message: string
+    stack?: string
+  }
 } 

@@ -165,12 +165,7 @@ export const TurnBasedDiscussionPanel: FC<TurnBasedDiscussionPanelProps> = ({
                     <div className="flex-1">
                       <p className="break-words">{speech.content}</p>
                       
-                      {/* AI置信度指示器 */}
-                      {speech.isAI && speech.confidence && (
-                        <div className="mt-1 text-xs opacity-70">
-                          置信度: {Math.round(speech.confidence * 100)}%
-                        </div>
-                      )}
+
                     </div>
                   </div>
                 </div>

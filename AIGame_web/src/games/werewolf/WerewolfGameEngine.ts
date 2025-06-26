@@ -2,6 +2,8 @@ import { GameEngine } from '../../core/game/GameEngine'
 import { GamePhase, RoleType, NightAction, Vote, GameLog, PlayerSpeech, GameEventType, SpeechEmotion, GameState, Player, GameSettings } from '../../store/werewolf/types'
 import { AIMessage, AIActionResponse } from '../../core/ai/AIClient'
 import type { AIActionRequest } from '../../core/game/GameEngine'
+import { WerewolfAIService } from '../../lib/ai/WerewolfAIService'
+import { AILogger, LoggedAIRequest } from '../../lib/ai/AILogger'
 import {
   WEREWOLF_SYSTEM_PROMPT,
   ROLE_SPECIFIC_PROMPTS,
@@ -74,6 +76,7 @@ export interface WerewolfPlayer extends Player {
 export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
   private phaseTimer: NodeJS.Timeout | null = null
   private taskCompletionTimer: NodeJS.Timeout | null = null
+  private aiService: WerewolfAIService
   private readonly PHASE_DURATIONS = {
     preparation: 30,
     night: 120,
@@ -92,6 +95,7 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
 
   constructor(initialState: WerewolfGameState) {
     super(initialState)
+    this.aiService = new WerewolfAIService()
     this.setupGameFlow()
   }
 
@@ -407,7 +411,6 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
         return {
           action: 'speak',
           reasoning: parsed.reasoning || '基于当前局势的分析',
-          confidence: parsed.confidence || 0.7,
           content: parsed.message || content.trim()
         } as any
       }
@@ -428,7 +431,6 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
       return {
         action: targetId, // 直接使用AI选择的目标ID
         reasoning: parsed.reasoning || '基于当前局势的判断',
-        confidence: parsed.confidence || 0.7,
         content: parsed.message || ''
       } as any
     } catch (error) {
@@ -1158,8 +1160,7 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
     playerId: string, 
     content: string, 
     emotion: SpeechEmotion = 'neutral',
-    reasoning?: string,
-    confidence?: number
+    reasoning?: string
   ): void {
     const player = this.gameState.players.find(p => p.id === playerId)
     if (!player) return
@@ -1175,7 +1176,6 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
       timestamp: Date.now(),
       isAI: !player.isPlayer,
       reasoning,
-      confidence,
       isVisible: true
     }
     
@@ -1598,45 +1598,36 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
     // 如果是AI玩家且没有提供内容，则请求AI生成发言
     if (!player.isPlayer && !speechContent) {
       try {
-        const discussionRequest: AIActionRequest = {
-          gameId: this.gameState.gameId,
-          playerId: player.id,
-          phase: 'day_discussion',
-          round: this.gameState.currentRound,
-          context: this.buildDiscussionContext(player),
-          availableActions: ['speak'],
-          gameState: this.gameState
-        }
-        
         console.log(`🗣️ 请求AI玩家 ${player.name} 发言`)
-        const response = await this.processAIActionsConcurrently([discussionRequest], 1)
         
-        // 修复发言内容获取逻辑 - 从content字段获取，而不是metadata.speechContent
-        if (!response[0]?.content) {
+        // 使用WerewolfAIService生成发言
+        const speechResult = await this.aiService.generateSpeech(
+          player as any, 
+          this.gameState as any, 
+          this.buildDiscussionContext(player)
+        )
+        
+        if (!speechResult.message) {
           throw new Error(`AI玩家 ${player.name} 未返回有效发言内容`)
         }
         
-        speechContent = response[0].content
+        speechContent = speechResult.message
         
-        // 确定发言情感 - 从response中直接获取，而不是metadata
+        // 确定发言情感
         let emotion: SpeechEmotion = 'neutral'
-        if (response[0].metadata?.emotion) {
-          switch (response[0].metadata.emotion) {
-            case 'suspicious': emotion = 'suspicious'; break
-            case 'defensive': emotion = 'defensive'; break
-            case 'aggressive': emotion = 'aggressive'; break
-            case 'confident': emotion = 'confident'; break
-            default: emotion = 'neutral'
-          }
+        switch (speechResult.emotion) {
+          case 'suspicious': emotion = 'suspicious'; break
+          case 'defensive': emotion = 'defensive'; break
+          case 'aggressive': emotion = 'aggressive'; break
+          case 'confident': emotion = 'confident'; break
+          default: emotion = 'neutral'
         }
         
         // 添加发言记录
         this.addPlayerSpeech(
           player.id, 
           speechContent, 
-          emotion, 
-          response[0].reasoning,
-          response[0].confidence
+          emotion
         )
         
         console.log(`🗣️ ${player.name} AI发言: ${speechContent}`)
@@ -2136,5 +2127,75 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
         continue
       }
     }
+  }
+
+  // 重写AI请求方法，添加日志记录功能
+  async requestAIAction(request: AIActionRequest): Promise<AIActionResponse> {
+    const player = this.gameState.players.find(p => p.id === request.playerId)
+    if (!player) {
+      throw new Error(`找不到玩家 ${request.playerId}`)
+    }
+
+    // 构建日志请求对象
+    const actionType = this.getActionTypeFromRequest(request)
+    const logRequest: LoggedAIRequest = {
+      playerId: request.playerId,
+      playerName: player.name,
+      gamePhase: request.phase as any,
+      round: request.round,
+      actionType: actionType,
+      gameState: this.gameState as any,
+      additionalContext: request.context,
+      availableTargets: request.availableActions
+    }
+
+    // 构建消息
+    const messages = this.buildAIPrompt(request)
+    const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
+    
+    // 记录AI请求开始
+    const logId = AILogger.logRequest(logRequest, messages as any, fullPrompt)
+    const startTime = Date.now()
+
+    try {
+      // 调用父类的AI请求方法
+      const response = await super.requestAIAction(request)
+      const processingTime = Date.now() - startTime
+      
+      // 记录AI响应
+      AILogger.logResponse(logId, JSON.stringify(response), response, processingTime)
+      
+      return response
+    } catch (error) {
+      // 记录错误
+      if (error instanceof Error) {
+        AILogger.logError(logId, error)
+      }
+      
+      throw error
+    }
+  }
+
+  // 根据请求确定行动类型
+  private getActionTypeFromRequest(request: AIActionRequest): string {
+    const player = this.gameState.players.find(p => p.id === request.playerId)
+    if (!player) return 'unknown'
+
+    if (request.phase === 'night') {
+      switch (player.role) {
+        case 'werewolf': return 'decision_kill'
+        case 'seer': return 'decision_check'
+        case 'witch': return 'decision_witch_action'
+        case 'guard': return 'decision_guard'
+        case 'hunter': return 'decision_shoot'
+        default: return 'decision_night'
+      }
+    } else if (request.phase === 'day_voting') {
+      return 'decision_vote'
+    } else if (request.phase === 'day_discussion') {
+      return 'speech'
+    }
+    
+    return `decision_${request.phase}`
   }
 } 

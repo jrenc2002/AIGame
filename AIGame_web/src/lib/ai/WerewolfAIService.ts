@@ -3,6 +3,7 @@ import { BaseAIService, AIResponse, AIServiceConfig } from './BaseAIService'
 import { Player, GameState } from '@/store/werewolf/types'
 import { buildWerewolfPrompt, buildDecisionPrompt } from '../werewolfPrompts'
 import { RobustJSONParser } from './RobustJSONParser'
+import { AILogger, LoggedAIRequest } from './AILogger'
 
 // 狼人杀AI决策结果
 export interface WerewolfAIDecision {
@@ -221,13 +222,42 @@ export class WerewolfAIService extends BaseAIService {
     console.log(`🗣️ 请求AI玩家 ${player.name} 发言`)
     
     const messages = WerewolfContextBuilder.buildGameContext(player, gameState, context)
+    const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
+    
+    // 创建日志请求对象
+    const logRequest: LoggedAIRequest = {
+      playerId: player.id,
+      playerName: player.name,
+      gamePhase: gameState.currentPhase,
+      round: gameState.currentRound,
+      actionType: 'speech',
+      gameState: gameState,
+      additionalContext: context
+    }
+    
+    // 记录AI请求
+    const logId = AILogger.logRequest(logRequest, messages, fullPrompt)
+    const startTime = Date.now()
     
     try {
       const response = await this.generateResponse(messages)
       console.log(`✅ 收到AI发言响应:`, response.content)
-      return this.parseSpeechResponse(response)
+      
+      const result = this.parseSpeechResponse(response)
+      const processingTime = Date.now() - startTime
+      
+      // 记录AI响应
+      AILogger.logResponse(logId, response.content, result, processingTime)
+      
+      return result
     } catch (error) {
       console.error(`❌ AI发言生成失败:`, error)
+      
+      // 记录错误
+      if (error instanceof Error) {
+        AILogger.logError(logId, error)
+      }
+      
       throw new Error(`AI发言生成失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
@@ -243,6 +273,22 @@ export class WerewolfAIService extends BaseAIService {
     console.log(`🗣️ 请求AI玩家 ${player.name} 流式发言`)
     
     const messages = WerewolfContextBuilder.buildGameContext(player, gameState, context)
+    const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
+    
+    // 创建日志请求对象
+    const logRequest: LoggedAIRequest = {
+      playerId: player.id,
+      playerName: player.name,
+      gamePhase: gameState.currentPhase,
+      round: gameState.currentRound,
+      actionType: 'speech_stream',
+      gameState: gameState,
+      additionalContext: context
+    }
+    
+    // 记录AI请求
+    const logId = AILogger.logRequest(logRequest, messages, fullPrompt)
+    const startTime = Date.now()
     
     try {
       let accumulatedContent = ''
@@ -252,14 +298,28 @@ export class WerewolfAIService extends BaseAIService {
         
         if (chunk.isComplete) {
           console.log(`✅ AI流式发言完成:`, accumulatedContent)
-          yield this.parseSpeechResponse({ 
+          
+          const result = this.parseSpeechResponse({ 
             content: accumulatedContent, 
             confidence: 0.8 
           } as AIResponse)
+          
+          const processingTime = Date.now() - startTime
+          
+          // 记录AI响应
+          AILogger.logResponse(logId, accumulatedContent, result, processingTime)
+          
+          yield result
         }
       }
     } catch (error) {
       console.error(`❌ AI流式发言生成失败:`, error)
+      
+      // 记录错误
+      if (error instanceof Error) {
+        AILogger.logError(logId, error)
+      }
+      
       throw new Error(`AI流式发言生成失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }
@@ -284,12 +344,43 @@ export class WerewolfAIService extends BaseAIService {
       content: decisionPrompt
     })
 
+    const fullPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n\n')
+    
+    // 创建日志请求对象
+    const logRequest: LoggedAIRequest = {
+      playerId: player.id,
+      playerName: player.name,
+      gamePhase: gameState.currentPhase,
+      round: gameState.currentRound,
+      actionType: `decision_${actionType}`,
+      gameState: gameState,
+      additionalContext: `决策类型: ${actionType}`,
+      availableTargets: availableTargets.map(t => `${t.name}(${t.id})`)
+    }
+    
+    // 记录AI请求
+    const logId = AILogger.logRequest(logRequest, messages, fullPrompt)
+    const startTime = Date.now()
+
     try {
       const response = await this.generateResponse(messages)
       console.log(`✅ 收到AI决策响应:`, response.content)
-      return this.parseDecisionResponse(response, availableTargets, actionType)
+      
+      const result = this.parseDecisionResponse(response, availableTargets, actionType)
+      const processingTime = Date.now() - startTime
+      
+      // 记录AI响应
+      AILogger.logResponse(logId, response.content, result, processingTime)
+      
+      return result
     } catch (error) {
       console.error(`❌ AI决策生成失败:`, error)
+      
+      // 记录错误
+      if (error instanceof Error) {
+        AILogger.logError(logId, error)
+      }
+      
       throw new Error(`AI决策生成失败: ${error instanceof Error ? error.message : 'unknown error'}`)
     }
   }

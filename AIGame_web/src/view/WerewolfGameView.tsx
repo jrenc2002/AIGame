@@ -10,6 +10,9 @@ import { APITestModal } from '@/components/werewolf/APITestModal'
 import { GamePauseOverlay } from '@/components/werewolf/GamePauseOverlay'
 import { UnifiedChatPanel } from '@/components/werewolf/UnifiedChatPanel'
 import { AIRequestErrorModal } from '@/components/werewolf/AIRequestErrorModal'
+import { AIPromptLogViewer } from '@/components/werewolf/AIPromptLogViewer'
+import { aiLogStore } from '@/store/werewolf/aiLogStore'
+import { AILogger } from '@/lib/ai/AILogger'
 
 import {
   initialGameState, 
@@ -41,6 +44,19 @@ const WerewolfGameView: FC = () => {
   // AI请求错误处理状态
   const [showAIErrorModal, setShowAIErrorModal] = useState(false)
   const [aiErrorInfo, setAIErrorInfo] = useState<any>(null)
+  
+  // AI日志查看器状态
+  const [showAILogViewer, setShowAILogViewer] = useState(false)
+  const [aiLogs, setAILogs] = useState(aiLogStore.getAllLogs())
+
+  // 定时刷新AI日志
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAILogs(aiLogStore.getAllLogs())
+    }, 2000) // 每2秒刷新一次
+
+    return () => clearInterval(interval)
+  }, [])
 
   const gameManager = GameManager.getInstance()
   const { createGame, startGame, executeAction } = useGameManager()
@@ -460,16 +476,75 @@ const WerewolfGameView: FC = () => {
                 </div>
               </div>
               
-              {/* 移动端收起按钮 */}
-              <button 
-                className="lg:hidden p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-                title="收起聊天面板"
-                aria-label="收起聊天面板"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+              <div className="flex items-center space-x-2">
+                {/* 添加测试日志按钮 */}
+                <button 
+                  onClick={() => {
+                    console.log('🧪 开始测试AI日志系统...')
+                    
+                    // 检查aiLogStore状态
+                    const currentLogs = aiLogStore.getAllLogs()
+                    console.log('📊 当前日志数量:', currentLogs.length)
+                    console.log('📊 当前日志内容:', currentLogs)
+                    
+                    // 添加测试日志
+                    AILogger.addTestLog()
+                    
+                    // 立即检查新日志
+                    setTimeout(() => {
+                      const newLogs = aiLogStore.getAllLogs()
+                      console.log('📊 添加后日志数量:', newLogs.length)
+                      console.log('📊 最新日志:', newLogs[0])
+                      
+                      // 强制刷新状态
+                      setAILogs(newLogs)
+                    }, 200)
+                    
+                    toast.success('已添加测试日志，请查看控制台')
+                  }}
+                  className="p-2 rounded-lg bg-green-500/20 hover:bg-green-500/30 transition-colors
+                           border border-green-400/30 hover:border-green-400/50 group"
+                  title="添加测试日志"
+                  aria-label="添加测试日志"
+                >
+                  <span className="text-sm group-hover:scale-110 transition-transform">🧪</span>
+                </button>
+
+                {/* AI日志查看器按钮 */}
+                <button 
+                  onClick={() => {
+                    const currentLogs = aiLogStore.getAllLogs()
+                    console.log('🤖 点击AI日志按钮，当前日志数量:', currentLogs.length)
+                    console.log('🤖 日志详情:', currentLogs)
+                    setAILogs(currentLogs)
+                    setShowAILogViewer(true)
+                  }}
+                  className="relative p-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 transition-colors
+                           border border-blue-400/30 hover:border-blue-400/50 group"
+                  title={`查看AI提示词日志 (${aiLogs.length}条)`}
+                  aria-label="查看AI提示词日志"
+                >
+                  <span className="text-sm group-hover:scale-110 transition-transform">🤖</span>
+                  {aiLogs.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs 
+                                   rounded-full h-4 w-4 flex items-center justify-center
+                                   min-w-[16px] text-[10px]">
+                      {aiLogs.length > 99 ? '99+' : aiLogs.length}
+                    </span>
+                  )}
+                </button>
+                
+                {/* 移动端收起按钮 */}
+                <button 
+                  className="lg:hidden p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                  title="收起聊天面板"
+                  aria-label="收起聊天面板"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
           
@@ -511,6 +586,17 @@ const WerewolfGameView: FC = () => {
         onClose={() => setShowAIErrorModal(false)}
         errorInfo={aiErrorInfo}
         onRetry={handleAIRequestRetry}
+      />
+
+      {/* AI提示词日志查看器 */}
+      <AIPromptLogViewer
+        logs={aiLogs}
+        isOpen={showAILogViewer}
+        onClose={() => {
+          setShowAILogViewer(false)
+          // 刷新日志数据
+          setAILogs(aiLogStore.getAllLogs())
+        }}
       />
     </div>
   )

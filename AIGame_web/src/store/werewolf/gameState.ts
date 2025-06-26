@@ -37,6 +37,8 @@ export const initialGameState: GameState = {
   votes: [],
   gameLogs: [],
   playerSpeeches: [],
+  aiReasoningMemories: [],
+  aiPromptLogs: [],
   phaseStartTime: 0,
   phaseTimeLimit: 0,
   settings: defaultGameSettings
