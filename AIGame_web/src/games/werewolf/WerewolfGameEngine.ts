@@ -77,6 +77,10 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
   private phaseTimer: NodeJS.Timeout | null = null
   private taskCompletionTimer: NodeJS.Timeout | null = null
   private aiService: WerewolfAIService
+  
+  // 添加发言状态跟踪，防止重复发言
+  private speakingInProgress: Set<string> = new Set()
+  
   private readonly PHASE_DURATIONS = {
     preparation: 30,
     night: 120,
@@ -1593,11 +1597,31 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
       return
     }
 
+    // 检查是否已经在发言中
+    if (this.speakingInProgress.has(playerId)) {
+      console.log(`🗣️ 玩家 ${player.name} 正在发言中，跳过重复请求`)
+      return
+    }
+
+    // 检查是否已经发言过
+    const currentRoundSpeeches = this.gameState.playerSpeeches.filter(speech => 
+      speech.round === this.gameState.currentRound && 
+      speech.phase === 'day_discussion' &&
+      speech.playerId === playerId
+    )
+    
+    if (currentRoundSpeeches.length > 0) {
+      console.log(`🗣️ 玩家 ${player.name} 本轮已发言过，跳过`)
+      return
+    }
+
     let speechContent = content
     
     // 如果是AI玩家且没有提供内容，则请求AI生成发言
     if (!player.isPlayer && !speechContent) {
       try {
+        // 标记正在发言
+        this.speakingInProgress.add(playerId)
         console.log(`🗣️ 请求AI玩家 ${player.name} 发言`)
         
         // 使用WerewolfAIService生成发言
@@ -1634,6 +1658,9 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
       } catch (error) {
         console.error(`❌ AI玩家 ${player.name} 发言失败:`, error)
         throw new Error(`AI玩家 ${player.name} 发言失败: ${error instanceof Error ? error.message : 'unknown error'}`)
+      } finally {
+        // 移除发言状态标记
+        this.speakingInProgress.delete(playerId)
       }
     } else if (player.isPlayer && speechContent) {
       // 用户发言
@@ -1655,37 +1682,60 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
     const nextIndex = currentSpeakerIndex + 1
     
     if (nextIndex >= speakingOrder.length) {
-      // 一轮发言结束，检查是否需要额外轮次
-      const speeches = this.gameState.playerSpeeches.filter(speech => 
+      // 一轮发言结束，检查每个玩家是否都已经发言过
+      const currentRoundSpeeches = this.gameState.playerSpeeches.filter(speech => 
         speech.round === this.gameState.currentRound && 
         speech.phase === 'day_discussion'
       )
       
-      const minSpeechesPerPlayer = 1 // 每人至少发言一次
-      const totalMinSpeeches = speakingOrder.length * minSpeechesPerPlayer
+      // 检查每个存活玩家是否都已发言
+      const alivePlayers = this.getAlivePlayers()
+      const playersWhoSpoke = new Set(currentRoundSpeeches.map(s => s.playerId))
+      const playersNotSpoken = alivePlayers.filter(p => !playersWhoSpoke.has(p.id))
       
-      if (speeches.length >= totalMinSpeeches) {
-        // 讨论完成
-        console.log('🗣️ 讨论阶段完成，所有玩家已发言')
-        this.updateGameState({ discussionComplete: true })
-        this.emitEvent('discussion_complete')
-      } else {
-        // 开始新一轮发言
-        console.log('🗣️ 开始新一轮发言')
-        this.updateGameState({ currentSpeakerIndex: 0 })
-        this.emitEvent('discussion_turn_start', speakingOrder[0])
+      if (playersNotSpoken.length > 0) {
+        // 还有玩家没有发言，继续当前轮次，但只让未发言的玩家发言
+        console.log(`🗣️ 发现 ${playersNotSpoken.map(p => p.name).join(', ')} 尚未发言，继续当前轮次`)
+        
+        // 从未发言的第一个玩家开始
+        const nextSpeakerId = playersNotSpoken[0].id
+        const nextSpeakerIndexInOrder = speakingOrder.findIndex(id => id === nextSpeakerId)
+        
+        this.updateGameState({ currentSpeakerIndex: nextSpeakerIndexInOrder })
+        this.emitEvent('discussion_turn_start', nextSpeakerId)
         
         // 立即检查并触发AI发言
-        this.checkAndTriggerAISpeech(speakingOrder[0])
+        this.checkAndTriggerAISpeech(nextSpeakerId)
+      } else {
+        // 所有玩家都已发言，讨论完成
+        console.log('🗣️ 讨论阶段完成，所有存活玩家已发言')
+        this.updateGameState({ discussionComplete: true })
+        this.emitEvent('discussion_complete')
       }
     } else {
+      // 检查下一个玩家是否已经发言过
+      const nextSpeakerId = speakingOrder[nextIndex]
+      const currentRoundSpeeches = this.gameState.playerSpeeches.filter(speech => 
+        speech.round === this.gameState.currentRound && 
+        speech.phase === 'day_discussion'
+      )
+      const hasSpoken = currentRoundSpeeches.some(s => s.playerId === nextSpeakerId)
+      
+      if (hasSpoken) {
+        // 下一个玩家已经发言过，跳过到下一个
+        console.log(`🗣️ 玩家 ${nextSpeakerId} 已发言过，跳过到下一个`)
+        this.updateGameState({ currentSpeakerIndex: nextIndex })
+        this.advanceToNextSpeaker() // 递归调用找到下一个未发言的玩家
+        return
+      }
+      
       // 下一个玩家发言
       this.updateGameState({ currentSpeakerIndex: nextIndex })
-      this.emitEvent('discussion_turn_start', speakingOrder[nextIndex])
-      console.log(`🗣️ 轮到 ${speakingOrder[nextIndex]} 发言`)
+      this.emitEvent('discussion_turn_start', nextSpeakerId)
+      console.log(`🗣️ 轮到 ${nextSpeakerId} 发言`)
       
       // 立即检查并触发AI发言
-      this.checkAndTriggerAISpeech(speakingOrder[nextIndex])
+      this.checkAndTriggerAISpeech(nextSpeakerId)
     }
   }
 
@@ -1694,6 +1744,24 @@ export class WerewolfGameEngine extends GameEngine<WerewolfGameState> {
     const player = this.gameState.players.find(p => p.id === playerId)
     
     if (player && !player.isPlayer && player.status === 'active') {
+      // 检查是否已经在发言中
+      if (this.speakingInProgress.has(playerId)) {
+        console.log(`🤖 AI玩家 ${player.name} 已在发言中，跳过触发`)
+        return
+      }
+      
+      // 检查是否已经发言过
+      const currentRoundSpeeches = this.gameState.playerSpeeches.filter(speech => 
+        speech.round === this.gameState.currentRound && 
+        speech.phase === 'day_discussion' &&
+        speech.playerId === playerId
+      )
+      
+      if (currentRoundSpeeches.length > 0) {
+        console.log(`🤖 AI玩家 ${player.name} 本轮已发言过，跳过触发`)
+        return
+      }
+      
       console.log(`🤖 自动触发AI玩家 ${player.name} 发言`)
       
       // 延迟500ms让前端UI先更新，然后触发AI发言
